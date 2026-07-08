@@ -7,4 +7,4 @@ cd ..
 
 rm "../${folder}_${version}.zip"
 
-zip -r "../${folder}_${version}.zip" "${folder}" -x "*/.vscode/**\*" -x "*.git*" -x "*/\.*" -x "*/archive/*"
+zip -r "../${folder}_${version}.zip" "${folder}" -x "*/.vscode/**\*" -x "*.git*" -x "*/\.*" -x "*/archive/*" -x "*/reference/*"

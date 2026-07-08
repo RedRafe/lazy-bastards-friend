@@ -1,14 +1,12 @@
 {
-  "name": "factorio-mod-template",
+  "name": "lazy-bastards-friend",
   "version": "0.1.0",
-  "title": "Factorio Mod Template",
+  "title": "Lazy Bastard's Friend",
   "author": "RedRafe",
-  "source": "https://github.com/RedRafe/factorio-mod-template",
-  "homepage": "https://mods.factorio.com/mod/factorio-mod-template",
+  "source": "https://github.com/RedRafe/lazy-bastards-friend",
+  "homepage": "https://mods.factorio.com/mod/lazy-bastards-friend",
   "contact": "Discord: @redrafe",
-  "dependencies": [
-    "base >= 2.1"
-  ],
-  "description": "A ready-to-use template for Factorio mods",
+  "dependencies": [ "base >= 2.1" ],
+  "description": "An early game quality-of-life mod that automatically feeds coal into burners, collects plates, and distributes items in a radius around the player. Skip the early game grind, stop hand feeding, and enjoy effortless autofill and autofeed functionality right from the start.",
   "factorio_version": "2.1"
 }
