@@ -7,7 +7,7 @@ local State = require('scripts.state')
 local Gui = {}
 
 -- Bump to force a destroy+rebuild of every player's panel on join/config change.
-local GUI_VERSION = 1
+local GUI_VERSION = 2
 
 local FRAME_NAME = 'lbf-relative'
 
@@ -67,6 +67,15 @@ function Gui.build(player)
     })
     radius_flow.add({ type = 'label', name = 'lbf-radius-value', caption = '16' })
 
+    -- Tagged for the admin dispatcher (scripts/gui/admin.lua), not ours.
+    content.add({
+        type = 'button',
+        name = 'lbf-admin-open',
+        caption = { 'lbf-gui.admin-open' },
+        tooltip = { 'lbf-gui.admin-open-tooltip' },
+        tags = { lbf_admin_action = 'toggle' },
+    })
+
     State.get_player_data(player.index).gui_version = GUI_VERSION
     Gui.sync(player)
 end
@@ -104,6 +113,8 @@ function Gui.sync(player)
             checkbox.tooltip = { 'lbf-gui.channel-' .. channel .. '-tooltip' }
         end
     end
+
+    content['lbf-admin-open'].visible = player.admin
 
     local radius = State.get_radius(player.index)
     local radius_flow = content['radius-flow']

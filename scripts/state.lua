@@ -42,6 +42,7 @@ function State.init()
     storage.auto_disabled = storage.auto_disabled or false
     storage.spm_strikes = storage.spm_strikes or 0
     storage.scheduler = storage.scheduler or { queue = {}, cursor = 1 }
+    storage.admin_guis = storage.admin_guis or {}
     storage.players = storage.players or {}
 end
 
@@ -127,6 +128,11 @@ end
 --- @param value boolean
 function State.set_master(channel, value)
     storage.active[channel] = value
+    -- Re-enabling any retired master re-arms the SPM watchdog (DESIGN.md §2.1).
+    if value then
+        storage.auto_disabled = false
+        storage.spm_strikes = 0
+    end
 end
 
 --- @param value boolean
@@ -145,6 +151,15 @@ end
 --- @param value boolean
 function State.set_player_enabled(player, channel, value)
     State.get_player_data(player.index).enabled[channel] = value
+end
+
+--- Admin per-player, per-channel lock. Locked = the channel is off for that
+--- player no matter what they choose (§2).
+--- @param player_index uint
+--- @param channel LbfChannel
+--- @param locked boolean
+function State.set_locked(player_index, channel, locked)
+    State.get_player_data(player_index).locked[channel] = locked
 end
 
 --- @param radius number

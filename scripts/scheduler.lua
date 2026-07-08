@@ -22,6 +22,9 @@ local function on_nth_tick_handler()
         return
     end
     if scheduler.cursor > #queue then
+        -- New sweep: rotate the order so the tail position (which collects any
+        -- fair-share remainder, §1.4) doesn't always fall on the same player.
+        table.insert(queue, table.remove(queue, 1))
         scheduler.cursor = 1
     end
     local player_index = queue[scheduler.cursor]
@@ -29,7 +32,13 @@ local function on_nth_tick_handler()
 
     local player = game.get_player(player_index)
     if player and player.connected and State.any_effective(player_index) then
-        Raid.service(player)
+        -- Players still due in this sweep contest shared collect sources (§1.4).
+        local pending
+        for i = scheduler.cursor, #queue do
+            pending = pending or {}
+            pending[#pending + 1] = queue[i]
+        end
+        Raid.service(player, pending)
     else
         Scheduler.rebuild() -- queue went stale (player left/disabled/removed)
     end

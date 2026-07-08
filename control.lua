@@ -4,13 +4,19 @@
 local State = require('scripts.state')
 local Rendering = require('scripts.rendering')
 local RelativeGui = require('scripts.gui.relative')
+local AdminGui = require('scripts.gui.admin')
 local Shortcut = require('scripts.shortcut')
 local Scheduler = require('scripts.scheduler')
+local Watchdog = require('scripts.watchdog')
+require('scripts.remote')
 
 State.add_refresh_handler(Rendering.refresh)
 State.add_refresh_handler(RelativeGui.sync)
+State.add_refresh_handler(AdminGui.sync)
 State.add_refresh_handler(Shortcut.sync)
+State.add_refresh_handler(Watchdog.refresh)
 State.add_refresh_handler(Scheduler.refresh)
+Watchdog.add_check_listener(AdminGui.refresh_all) -- live SPM readout while open
 
 -- Tiny dispatcher so multiple modules can subscribe to the same event without
 -- clobbering each other's script.on_event registration.
@@ -47,6 +53,7 @@ script.on_init(function()
     for _, player in pairs(game.players) do
         setup_player(player)
     end
+    Watchdog.rebuild()
 end)
 
 script.on_configuration_changed(function()
@@ -55,12 +62,14 @@ script.on_configuration_changed(function()
         RelativeGui.build(player)
         State.refresh(player)
     end
+    Watchdog.rebuild()
 end)
 
--- on_load may only read storage/settings: re-register the conditional
--- nth-tick handler exactly as the saved state implies.
+-- on_load may only read storage: re-register the conditional nth-tick
+-- handlers exactly as the saved state implies.
 script.on_load(function()
     Scheduler.apply()
+    Watchdog.apply()
 end)
 
 on(defines.events.on_player_created, function(event)
@@ -76,13 +85,16 @@ on(defines.events.on_player_joined_game, function(event)
         RelativeGui.ensure(player)
         State.refresh(player)
     end
+    AdminGui.refresh_all() -- online dots + connected-only lists
 end)
 
 on(defines.events.on_player_left_game, function(event)
     local player = game.get_player(event.player_index)
     if player then
+        AdminGui.close(player)
         State.refresh(player) -- player.connected is false: destroys renders
     end
+    AdminGui.refresh_all()
 end)
 
 on(defines.events.on_player_removed, function(event)
@@ -90,6 +102,23 @@ on(defines.events.on_player_removed, function(event)
     if data then
         Rendering.destroy(data)
         storage.players[event.player_index] = nil
+    end
+    storage.admin_guis[event.player_index] = nil
+    AdminGui.refresh_all()
+end)
+
+on(defines.events.on_player_demoted, function(event)
+    local player = game.get_player(event.player_index)
+    if player then
+        AdminGui.close(player) -- their frame must not outlive their rights
+        State.refresh(player) -- hides the admin button in their panel
+    end
+end)
+
+on(defines.events.on_player_promoted, function(event)
+    local player = game.get_player(event.player_index)
+    if player then
+        State.refresh(player)
     end
 end)
 
@@ -147,10 +176,22 @@ on(defines.events.on_runtime_mod_setting_changed, function(event)
         State.refresh_all() -- re-clamp slider bounds and drawn radii everywhere
     elseif event.setting == 'lbf-update-period' then
         Scheduler.rebuild() -- recompute the nth-tick interval
+    elseif
+        event.setting == 'lbf-watchdog-enabled'
+        or event.setting == 'lbf-watchdog-stops-combat'
+        or event.setting == 'lbf-spm-threshold'
+    then
+        storage.spm_strikes = 0 -- changed rules restart the debounce
+        Watchdog.rebuild()
+        AdminGui.refresh_all()
     end
 end)
 
 -- == GUI ====================================================================
 
 on(defines.events.on_gui_checked_state_changed, RelativeGui.dispatch)
+on(defines.events.on_gui_checked_state_changed, AdminGui.dispatch)
 on(defines.events.on_gui_value_changed, RelativeGui.dispatch)
+on(defines.events.on_gui_click, AdminGui.dispatch)
+on(defines.events.on_gui_switch_state_changed, AdminGui.dispatch)
+on(defines.events.on_gui_closed, AdminGui.on_gui_closed)

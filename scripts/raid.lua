@@ -172,27 +172,125 @@ end
 
 -- == Pass 1+2: collect ======================================================
 
+--- @class LbfRival
+--- @field x double
+--- @field y double
+--- @field radius integer
+--- @field square boolean
+--- @field chests boolean
+
+--- Other players still due in this sweep whose service area may overlap ours:
+--- shared collect sources get split with them instead of taken whole (§1.4).
+--- Players already serviced this sweep took their share when it was their turn.
+--- Returns nil when nobody contests — the fast path costs one loop over `pending`.
+--- @param player LuaPlayer
+--- @param pending uint[]?
+--- @return LbfRival[]?
+local function get_rivals(player, pending)
+    if not pending then
+        return nil
+    end
+    local character = player.character
+    local surface_index = character.surface.index
+    local px, py = character.position.x, character.position.y
+    local radius = State.get_radius(player.index)
+    local rivals
+    for _, index in pairs(pending) do
+        if index ~= player.index and State.effective(index, 'collect') then
+            local other = game.get_player(index)
+            local other_character = other and other.connected and other.character
+            if other_character and other_character.surface.index == surface_index then
+                local other_radius = State.get_radius(index)
+                local ox, oy = other_character.position.x, other_character.position.y
+                if math.abs(ox - px) <= radius + other_radius and math.abs(oy - py) <= radius + other_radius then
+                    local other_data = State.get_player_data(index)
+                    rivals = rivals or {}
+                    rivals[#rivals + 1] = {
+                        x = ox,
+                        y = oy,
+                        radius = other_radius,
+                        square = other_data.shape == 'square',
+                        chests = other_data.flags.chests,
+                    }
+                end
+            end
+        end
+    end
+    return rivals
+end
+
+--- How many players get a cut of this entity: us + every rival whose area
+--- covers it (their AoE shape is their search shape, §5).
+--- @param entity LuaEntity
+--- @param rivals LbfRival[]
+--- @param is_chest boolean chests only count rivals who take from chests
+--- @return integer
+local function claim_divisor(entity, rivals, is_chest)
+    local k = 1
+    local position = entity.position
+    for _, rival in pairs(rivals) do
+        if not is_chest or rival.chests then
+            local dx, dy = position.x - rival.x, position.y - rival.y
+            local inside
+            if rival.square then
+                inside = math.abs(dx) <= rival.radius and math.abs(dy) <= rival.radius
+            else
+                inside = dx * dx + dy * dy <= rival.radius * rival.radius
+            end
+            if inside then
+                k = k + 1
+            end
+        end
+    end
+    return k
+end
+
+--- Take a 1/k share of each item in the source (by name, across qualities).
+--- The floor remainder stays put for the players still due this sweep.
+--- @param source LuaInventory
+--- @param dest LuaInventory
+--- @param k integer
+local function take_share(source, dest, k)
+    if k <= 1 then
+        Transfer.take_all(source, dest)
+        return
+    end
+    local totals = {}
+    for _, item in pairs(source.get_contents()) do
+        totals[item.name] = (totals[item.name] or 0) + item.count
+    end
+    for name, count in pairs(totals) do
+        local share = math.floor(count / k)
+        if share > 0 then
+            Transfer.give(source, dest, name, share)
+        end
+    end
+end
+
 --- @param entities LuaEntity[]
 --- @param main LuaInventory
 --- @param take_chests boolean
-local function collect_pass(entities, main, take_chests)
+--- @param rivals LbfRival[]?
+local function collect_pass(entities, main, take_chests, rivals)
     for _, entity in pairs(entities) do
         if entity.valid then
+            local is_chest = IS_CHEST[entity.type]
+            local k = rivals and claim_divisor(entity, rivals, is_chest or false) or 1
             local output_define = OUTPUT_INVENTORY[entity.type]
             if output_define then
                 local output = entity.get_inventory(output_define)
                 if output and not output.is_empty() then
-                    Transfer.take_all(output, main)
+                    take_share(output, main, k)
                 end
             end
             local burnt = entity.get_burnt_result_inventory()
             if burnt and not burnt.is_empty() then
-                Transfer.take_all(burnt, main)
+                take_share(burnt, main, k)
             end
-            if take_chests and IS_CHEST[entity.type] then
+            if take_chests and is_chest then
                 local chest = entity.get_inventory(defines.inventory.chest)
                 if chest and not chest.is_empty() then
-                    Transfer.take_all(chest, main)
+                    take_share(chest, main, k)
                 end
             end
         end
@@ -386,7 +484,8 @@ end
 
 --- Service one player for one cycle. Cheap early-outs first (§7).
 --- @param player LuaPlayer
-function Raid.service(player)
+--- @param pending uint[]? indices of players still due in this scheduler sweep
+function Raid.service(player, pending)
     if not player.valid or not player.connected then
         return
     end
@@ -421,7 +520,7 @@ function Raid.service(player)
     local entities = get_entities(player, data, take_chests)
 
     if collect then
-        collect_pass(entities, main, take_chests)
+        collect_pass(entities, main, take_chests, get_rivals(player, pending))
     end
     if feed or combat then
         local totals = inventory_totals(main)

@@ -21,6 +21,8 @@ local BENCH = {
     -- Drills on the spawned ore patch (fuel pass on mining drills)
     { name = 'burner-mining-drill', position = { -4, -14 }, direction = defines.direction.south },
     { name = 'burner-mining-drill', position = { 2, -14 }, direction = defines.direction.south },
+    { name = 'stone-furnace', position = { -4, -12 } },
+    { name = 'stone-furnace', position = { 2, -12 } },
     -- Turret row (ammo pass): empty, partially loaded, artillery; boiler + inserter (fuel pass)
     { name = 'gun-turret', position = { -8, 6 } },
     { name = 'gun-turret', position = { -4, 6 }, items = { [defines.inventory.turret_ammo] = { ['firearm-magazine'] = 5 } } },
@@ -32,7 +34,11 @@ local BENCH = {
     { name = 'iron-chest', position = { 2, 12 } },
     -- Powered assembler crafting gears (collect pass now, ingredient pass in M4)
     { name = 'assembling-machine-1', position = { 10, 12 }, recipe = 'iron-gear-wheel', items = { [defines.inventory.crafter_input] = { ['iron-plate'] = 40 } } },
-    { name = 'small-electric-pole', position = { 12.5, 12.5 } },
+    -- Labs for the SPM watchdog (M3): research is queued but the labs start
+    -- empty — insert packs from the kit to make science flow and trip it.
+    { name = 'lab', position = { 15, 12 } },
+    { name = 'lab', position = { 15, 15 } },
+    { name = 'medium-electric-pole', position = { 12.5, 12.5 } },
     -- base's creative power source: 500GW, no collision box
     { name = 'hidden-electric-energy-interface', position = { 12.5, 12.5 } },
 }
@@ -48,6 +54,7 @@ local KIT = {
     ['firearm-magazine'] = 60,
     ['piercing-rounds-magazine'] = 40,
     ['artillery-shell'] = 10,
+    ['automation-science-pack'] = 200,
 }
 
 local function build_bench(surface, force)
@@ -103,6 +110,16 @@ script.on_init(function()
     local surface = game.surfaces['nauvis']
     surface.peaceful_mode = true
     build_bench(surface, game.forces.player)
+    -- Watchdog test setup: research is queued so the labs consume packs the
+    -- moment they get some, and the threshold is low enough to trip within
+    -- ~30s of research (3 checks × ~10s) instead of needing a 45 SPM factory.
+    -- Runtime-global settings can only be written by their owning mod, so the
+    -- threshold goes through the mod's remote interface (docs/API.md).
+    game.forces.player.technologies['steam-power'].researched = true
+    game.forces.player.technologies['electronics'].researched = true
+    game.forces.player.technologies['automation-science-pack'].researched = true
+    game.forces.player.add_research('automation')
+    remote.call('lazy-bastards-friend', 'set_spm_threshold', 5)
 end)
 
 script.on_event(defines.events.on_player_created, function(event)
@@ -116,6 +133,10 @@ script.on_event(defines.events.on_player_created, function(event)
             main.insert({ name = name, count = count })
         end
     end
+
+    player.game_view_settings.show_entity_info = true
+
     player.print('[color=yellow]LBF test bench[/color]: furnaces north, turrets south, chests + assembler south-east.')
     player.print('Reserves: /c __lazy-bastards-friend__ storage.players[' .. player.index .. "].reserves['coal'] = 50")
+    player.print('Watchdog: threshold is lowered to 5 SPM — put science packs into the labs south-east and it should retire the mod in ~30s. Admin panel: /lbf-admin or the button in the character-screen side panel.')
 end)

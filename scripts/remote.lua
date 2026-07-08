@@ -1,0 +1,151 @@
+--- Public remote interface (DESIGN.md §10.1) — everything the mod's own script
+--- can do, other mods and scenarios can do through here. Documented with
+--- copy-paste examples in docs/API.md; keep the two in sync.
+
+local State = require('scripts.state')
+local Watchdog = require('scripts.watchdog')
+
+--- @param channel any
+--- @return LbfChannel
+local function check_channel(channel)
+    if channel ~= 'collect' and channel ~= 'feed' and channel ~= 'combat' then
+        error("lazy-bastards-friend: unknown channel '" .. tostring(channel) .. "' (expected 'collect', 'feed' or 'combat')")
+    end
+    return channel
+end
+
+--- @param player_index any
+--- @return LuaPlayer
+local function check_player(player_index)
+    local player = game.get_player(player_index)
+    if not player then
+        error('lazy-bastards-friend: no player with index ' .. tostring(player_index))
+    end
+    return player
+end
+
+--- @param channels table<LbfChannel, boolean>
+--- @return table<LbfChannel, boolean>
+local function copy_channels(channels)
+    return { collect = channels.collect, feed = channels.feed, combat = channels.combat }
+end
+
+remote.add_interface('lazy-bastards-friend', {
+    --- Global master switch for one channel. Enabling re-arms the SPM watchdog.
+    --- @param channel LbfChannel
+    --- @param value boolean
+    set_active = function(channel, value)
+        State.set_master(check_channel(channel), value == true)
+        State.refresh_all()
+    end,
+
+    --- @param channel LbfChannel
+    --- @return boolean
+    get_active = function(channel)
+        return storage.active[check_channel(channel)]
+    end,
+
+    --- Admin lock: while locked the channel is off for that player regardless
+    --- of their own preference.
+    --- @param player_index uint
+    --- @param channel LbfChannel
+    --- @param locked boolean
+    lock_player = function(player_index, channel, locked)
+        local player = check_player(player_index)
+        State.set_locked(player.index, check_channel(channel), locked == true)
+        State.refresh(player)
+    end,
+
+    --- The player's own toggle, as if they clicked it in their panel.
+    --- @param player_index uint
+    --- @param channel LbfChannel
+    --- @param enabled boolean
+    set_player_enabled = function(player_index, channel, enabled)
+        local player = check_player(player_index)
+        State.set_player_enabled(player, check_channel(channel), enabled == true)
+        State.refresh(player)
+    end,
+
+    --- @param player_index uint
+    --- @return table see docs/API.md
+    get_player_state = function(player_index)
+        local player = check_player(player_index)
+        local data = State.get_player_data(player.index)
+        local effective = {}
+        for _, channel in pairs(State.channels) do
+            effective[channel] = State.effective(player.index, channel)
+        end
+        local reserves = {}
+        for name, count in pairs(data.reserves) do
+            reserves[name] = count
+        end
+        return {
+            enabled = copy_channels(data.enabled),
+            locked = copy_channels(data.locked),
+            effective = effective,
+            radius = State.get_radius(player.index),
+            shape = data.shape,
+            reserves = reserves,
+        }
+    end,
+
+    --- Clamped to the lbf-min-radius / lbf-max-radius map settings.
+    --- @param player_index uint
+    --- @param radius number
+    set_player_radius = function(player_index, radius)
+        local player = check_player(player_index)
+        if type(radius) ~= 'number' then
+            error('lazy-bastards-friend: radius must be a number')
+        end
+        State.set_radius(player, radius)
+        State.refresh(player)
+    end,
+
+    --- @return table see docs/API.md
+    get_state = function()
+        return {
+            active = copy_channels(storage.active),
+            auto_disabled = storage.auto_disabled == true,
+            watchdog = Watchdog.status(),
+            spm_threshold = settings.global['lbf-spm-threshold'].value,
+        }
+    end,
+
+    --- Set the lbf-spm-threshold map setting. Runtime-global settings can only
+    --- be written by the mod that owns them, so scenarios/other mods must go
+    --- through here. Fires the usual setting-changed handling (debounce reset).
+    --- @param value number
+    set_spm_threshold = function(value)
+        if type(value) ~= 'number' or value < 0 then
+            error('lazy-bastards-friend: threshold must be a non-negative number')
+        end
+        settings.global['lbf-spm-threshold'] = { value = value }
+    end,
+
+    --- Current science-per-minute reading for a force (what the watchdog sees).
+    --- @param force ForceID
+    --- @return double
+    get_spm = function(force)
+        local kind = type(force)
+        local force_object = (kind == 'string' or kind == 'number') and game.forces[force] or force
+        if not force_object or force_object.object_name ~= 'LuaForce' or not force_object.valid then
+            error('lazy-bastards-friend: no force ' .. tostring(force))
+        end
+        return Watchdog.spm(force_object)
+    end,
+
+    --- Per-item minimum the mod never dips below when feeding (nil clears).
+    --- @param player_index uint
+    --- @param item_name string
+    --- @param count uint?
+    set_player_reserve = function(player_index, item_name, count)
+        local player = check_player(player_index)
+        if not prototypes.item[item_name] then
+            error("lazy-bastards-friend: unknown item '" .. tostring(item_name) .. "'")
+        end
+        if count ~= nil and (type(count) ~= 'number' or count < 0) then
+            error('lazy-bastards-friend: count must be nil or a non-negative number')
+        end
+        State.get_player_data(player.index).reserves[item_name] = count and math.floor(count) or nil
+    end,
+})
