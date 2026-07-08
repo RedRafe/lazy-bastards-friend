@@ -1,6 +1,7 @@
 # Personal
 .vscode/
 .DS_Store
+reference/
 
 # Allow the tasks directory itself
 !.vscode/tasks/

@@ -41,6 +41,7 @@ function State.init()
     storage.active = storage.active or { collect = true, feed = true, combat = true }
     storage.auto_disabled = storage.auto_disabled or false
     storage.spm_strikes = storage.spm_strikes or 0
+    storage.scheduler = storage.scheduler or { queue = {}, cursor = 1 }
     storage.players = storage.players or {}
 end
 
@@ -55,6 +56,7 @@ end
 --- @field opacity double
 --- @field flags table<string, boolean>
 --- @field reserves table<string, uint>
+--- @field cache {key: string, tick: uint, x: double, y: double, entities: LuaEntity[]}?
 --- @field render {edge: LuaRenderObject?, fill: LuaRenderObject?}
 --- @field idle uint
 --- @field gui_version uint

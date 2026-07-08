@@ -5,10 +5,12 @@ local State = require('scripts.state')
 local Rendering = require('scripts.rendering')
 local RelativeGui = require('scripts.gui.relative')
 local Shortcut = require('scripts.shortcut')
+local Scheduler = require('scripts.scheduler')
 
 State.add_refresh_handler(Rendering.refresh)
 State.add_refresh_handler(RelativeGui.sync)
 State.add_refresh_handler(Shortcut.sync)
+State.add_refresh_handler(Scheduler.refresh)
 
 -- Tiny dispatcher so multiple modules can subscribe to the same event without
 -- clobbering each other's script.on_event registration.
@@ -53,6 +55,12 @@ script.on_configuration_changed(function()
         RelativeGui.build(player)
         State.refresh(player)
     end
+end)
+
+-- on_load may only read storage/settings: re-register the conditional
+-- nth-tick handler exactly as the saved state implies.
+script.on_load(function()
+    Scheduler.apply()
 end)
 
 on(defines.events.on_player_created, function(event)
@@ -137,6 +145,8 @@ on(defines.events.on_runtime_mod_setting_changed, function(event)
         end
     elseif event.setting == 'lbf-min-radius' or event.setting == 'lbf-max-radius' then
         State.refresh_all() -- re-clamp slider bounds and drawn radii everywhere
+    elseif event.setting == 'lbf-update-period' then
+        Scheduler.rebuild() -- recompute the nth-tick interval
     end
 end)
 
