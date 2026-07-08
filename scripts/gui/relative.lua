@@ -15,6 +15,17 @@ local FRAME_NAME = 'lbf-relative'
 -- Behavior toggles, in display order; each maps to data.flags[<flag>].
 local BEHAVIOR_FLAGS = { 'fuel', 'ingredients', 'chests', 'ground', 'trash', 'summary' }
 
+-- Per-player mod setting each behavior flag mirrors (State.push_setting, §8).
+local FLAG_SETTING = {
+    fuel = 'lbf-feed-fuel',
+    ingredients = 'lbf-feed-ingredients',
+    chests = 'lbf-take-chests',
+    ground = 'lbf-pickup-ground',
+    trash = 'lbf-drain-trash',
+    summary = 'lbf-show-summary',
+    show_others = 'lbf-show-to-others',
+}
+
 -- Logistic group whose minimum values the import button copies into reserves (§6).
 local IMPORT_GROUP = 'LBF'
 
@@ -400,23 +411,31 @@ function Gui.dispatch(event)
         State.set_radius(player, element.slider_value)
         State.refresh(player)
     elseif action == 'toggle-flag' then
-        data.flags[tags.flag --[[@as string]]] = element.state
+        local flag = tags.flag --[[@as string]]
+        data.flags[flag] = element.state
+        State.push_setting(player, FLAG_SETTING[flag])
         State.refresh(player)
     elseif action == 'shape' then
         data.shape = element.selected_index == 2 and 'square' or 'circle'
+        State.push_setting(player, 'lbf-shape')
         State.refresh(player)
     elseif action == 'fill' then
         data.fill = element.state
+        State.push_setting(player, 'lbf-fill-area')
         State.refresh(player)
     elseif action == 'opacity' then
         data.opacity = element.slider_value / 100
+        State.push_setting(player, 'lbf-opacity')
         State.refresh(player)
     elseif action == 'use-player-color' then
         data.use_player_color = element.state
+        State.push_setting(player, 'lbf-use-my-color')
         State.refresh(player)
     elseif action == 'color' then
-        data.color[tags.component --[[@as string]]] = element.slider_value / 255
+        local component = tags.component --[[@as string]]
+        data.color[component] = element.slider_value / 255
         data.color.a = 1
+        State.push_setting(player, 'lbf-color')
         State.refresh(player)
     elseif action == 'reserve-add' then
         local name = element.elem_value --[[@as string?]]

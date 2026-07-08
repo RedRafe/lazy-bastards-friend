@@ -17,17 +17,16 @@ data:extend({
         small_icon_size = 64,
         order = 'l[lbf]',
     },
-    -- Invisible statistics item (DESIGN.md §10.5): the runtime pumps transferred
+    -- Statistics-only item: the runtime pumps transferred
     -- counts into item production statistics under this name, so the mod's
     -- activity shows up in the vanilla production graphs (like base's 'science').
     {
         type = 'item',
         name = 'lbf-items-moved',
-        icon = '__base__/graphics/icons/coal.png',
-        icon_size = 64,
+        icon = '__core__/graphics/icons/technology/constants/constant-logistic-slot.png',
+        icon_size = 128,
         subgroup = 'other',
         order = 'zz[lbf-items-moved]',
-        hidden = true,
         hidden_in_factoriopedia = true,
         stack_size = 1,
     },

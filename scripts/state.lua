@@ -56,6 +56,7 @@ function State.init()
         if flags.summary == nil then
             flags.summary = false
         end
+        data.summary = data.summary or { collected = {}, fed = {}, next_flush = 0 }
         for name in pairs(data.reserves) do
             if not prototypes.item[name] then
                 data.reserves[name] = nil
@@ -79,6 +80,7 @@ end
 --- @field render {edge: LuaRenderObject?, fill: LuaRenderObject?}
 --- @field idle uint
 --- @field gui_version uint
+--- @field summary {collected: table<string, integer>, fed: table<string, integer>, next_flush: uint}
 
 --- @param player_index uint
 --- @return LbfPlayerData
@@ -107,18 +109,118 @@ function State.get_player_data(player_index)
             render = {},
             idle = 0,
             gui_version = 0,
+            summary = { collected = {}, fed = {}, next_flush = 0 },
         }
         storage.players[player_index] = data
     end
     return data
 end
 
---- Pull per-player mod settings into storage. Called on player created/joined and
---- when the mod is added to an existing save.
+--- Per-player mod settings kept in sync with storage (DESIGN.md §8): each entry
+--- mirrors one storage.players[i] field, both ways, so admins/players can drive
+--- the mod from the in-game settings screen as well as the relative GUI.
+--- @type table<string, {get: fun(data: LbfPlayerData): any, set: fun(data: LbfPlayerData, value: any)}>
+local PLAYER_SETTINGS = {
+    ['lbf-radius'] = {
+        get = function(data) return data.radius end,
+        set = function(data, value) data.radius = State.clamp_radius(value) end,
+    },
+    ['lbf-feed-fuel'] = {
+        get = function(data) return data.flags.fuel end,
+        set = function(data, value) data.flags.fuel = value end,
+    },
+    ['lbf-feed-ingredients'] = {
+        get = function(data) return data.flags.ingredients end,
+        set = function(data, value) data.flags.ingredients = value end,
+    },
+    ['lbf-take-chests'] = {
+        get = function(data) return data.flags.chests end,
+        set = function(data, value) data.flags.chests = value end,
+    },
+    ['lbf-pickup-ground'] = {
+        get = function(data) return data.flags.ground end,
+        set = function(data, value) data.flags.ground = value end,
+    },
+    ['lbf-drain-trash'] = {
+        get = function(data) return data.flags.trash end,
+        set = function(data, value) data.flags.trash = value end,
+    },
+    ['lbf-show-summary'] = {
+        get = function(data) return data.flags.summary end,
+        set = function(data, value) data.flags.summary = value end,
+    },
+    ['lbf-shape'] = {
+        get = function(data) return data.shape end,
+        set = function(data, value) data.shape = value == 'square' and 'square' or 'circle' end,
+    },
+    ['lbf-fill-area'] = {
+        get = function(data) return data.fill end,
+        set = function(data, value) data.fill = value end,
+    },
+    ['lbf-opacity'] = {
+        get = function(data) return math.floor(data.opacity * 100 + 0.5) end,
+        set = function(data, value) data.opacity = value / 100 end,
+    },
+    ['lbf-use-my-color'] = {
+        get = function(data) return data.use_player_color end,
+        set = function(data, value) data.use_player_color = value end,
+    },
+    ['lbf-color'] = {
+        get = function(data) return data.color end,
+        set = function(data, value) data.color = { r = value.r, g = value.g, b = value.b, a = 1 } end,
+    },
+    ['lbf-show-to-others'] = {
+        get = function(data) return data.flags.show_others end,
+        set = function(data, value) data.flags.show_others = value end,
+    },
+}
+State.player_settings = PLAYER_SETTINGS
+
+--- Read one per-player mod setting into storage (settings screen -> storage).
+--- @param player LuaPlayer
+--- @param name string
+function State.pull_setting(player, name)
+    local field = PLAYER_SETTINGS[name]
+    if not field then
+        return
+    end
+    field.set(State.get_player_data(player.index), settings.get_player_settings(player)[name].value)
+end
+
+--- Read every mirrored per-player mod setting into storage. Called on player
+--- created/joined and when the mod is added to an existing save.
 --- @param player LuaPlayer
 function State.init_player(player)
-    local data = State.get_player_data(player.index)
-    data.radius = State.clamp_radius(settings.get_player_settings(player)['lbf-radius'].value --[[@as integer]])
+    for name in pairs(PLAYER_SETTINGS) do
+        State.pull_setting(player, name)
+    end
+end
+
+--- Push one storage field out to its mirrored per-player mod setting (relative
+--- GUI -> settings screen). No-op if already equal, so it never re-triggers
+--- itself via on_runtime_mod_setting_changed.
+--- @param player LuaPlayer
+--- @param name string
+--- @param a any
+--- @param b any
+--- @return boolean
+local function setting_values_equal(a, b)
+    if type(a) == 'table' and type(b) == 'table' then
+        return a.r == b.r and a.g == b.g and a.b == b.b and a.a == b.a
+    end
+    return a == b
+end
+
+function State.push_setting(player, name)
+    local field = PLAYER_SETTINGS[name]
+    if not field then
+        return
+    end
+    local value = field.get(State.get_player_data(player.index))
+    local player_settings = settings.get_player_settings(player)
+    if not setting_values_equal(player_settings[name].value, value) then
+        player_settings[name] = { value = value }
+    end
 end
 
 --- @param player_index uint
@@ -207,12 +309,8 @@ end
 --- @param player LuaPlayer
 --- @param radius number
 function State.set_radius(player, radius)
-    local value = State.clamp_radius(radius)
-    State.get_player_data(player.index).radius = value
-    local player_settings = settings.get_player_settings(player)
-    if player_settings['lbf-radius'].value ~= value then
-        player_settings['lbf-radius'] = { value = value }
-    end
+    State.get_player_data(player.index).radius = State.clamp_radius(radius)
+    State.push_setting(player, 'lbf-radius')
 end
 
 return State

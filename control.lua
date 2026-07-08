@@ -169,24 +169,20 @@ on('lbf-toggle', function(event)
 end)
 
 on(defines.events.on_runtime_mod_setting_changed, function(event)
-    if event.setting == 'lbf-radius' and event.player_index then
+    local setting = event.setting
+    if event.player_index and State.player_settings[setting] then
         local player = game.get_player(event.player_index)
         if player then
-            local data = State.get_player_data(player.index)
-            data.radius = State.clamp_radius(settings.get_player_settings(player)['lbf-radius'].value --[[@as number]])
+            State.pull_setting(player, setting)
             State.refresh(player)
         end
-    elseif event.setting == 'lbf-min-radius' or event.setting == 'lbf-max-radius' then
+    elseif setting == 'lbf-min-radius' or setting == 'lbf-max-radius' then
         State.refresh_all() -- re-clamp slider bounds and drawn radii everywhere
-    elseif event.setting == 'lbf-allow-chest-take' then
+    elseif setting == 'lbf-allow-chest-take' then
         State.refresh_all() -- grey out / restore the per-player chest checkbox
-    elseif event.setting == 'lbf-update-period' then
+    elseif setting == 'lbf-update-period' then
         Scheduler.rebuild() -- recompute the nth-tick interval
-    elseif
-        event.setting == 'lbf-watchdog-enabled'
-        or event.setting == 'lbf-watchdog-stops-combat'
-        or event.setting == 'lbf-spm-threshold'
-    then
+    elseif setting == 'lbf-watchdog-enabled' or setting == 'lbf-watchdog-stops-combat' or setting == 'lbf-spm-threshold' then
         storage.spm_strikes = 0 -- changed rules restart the debounce
         Watchdog.rebuild()
         AdminGui.refresh_all()

@@ -14,7 +14,8 @@ local Raid = {}
 local AFK_TICKS = 5 * 60 * 60 -- after 5 min AFK, service at 1/4 rate
 local CACHE_CYCLES = 10 -- re-scan at most every N update periods
 local CACHE_MOVE_FRACTION = 0.25 -- re-scan when moved more than radius * this
-local FEED_CRAFTS = 5 -- top up ingredient inputs to ~this many crafts per machine
+local FEED_SECONDS = 30 -- top up ingredient inputs to ~this many seconds of crafting/research
+local SUMMARY_INTERVAL_TICKS = 600 -- de-noise the flying text vs. the ~1s-per-player raid cycle
 
 -- Everything any pass may want; each pass filters by capability at use time
 -- (fuel inventory present, output map entry, turret ammo define).
@@ -59,10 +60,11 @@ local INGREDIENT_TYPES = { ['furnace'] = true, ['assembling-machine'] = true, ['
 
 -- == Smelt map (DESIGN.md §1.1 pass 4) ======================================
 
---- Rebuild storage.smelt_map: crafting category -> { ingredient item -> per-craft
---- amount }, from visible single-item-ingredient recipes. Hidden recipes are
---- excluded on purpose — that keeps recycler-style categories (whose hidden
---- recipes accept nearly every item) out of the map. Call on_init/config_changed.
+--- Rebuild storage.smelt_map: crafting category -> { ingredient item -> {amount,
+--- energy} } (per-craft amount and the recipe's crafting time, §1.1's 30s-of-
+--- crafting cap needs both), from visible single-item-ingredient recipes. Hidden
+--- recipes are excluded on purpose — that keeps recycler-style categories (whose
+--- hidden recipes accept nearly every item) out of the map. Call on_init/config_changed.
 function Raid.rebuild_smelt_map()
     local map = {}
     for _, recipe in pairs(prototypes.recipe) do
@@ -76,7 +78,10 @@ function Raid.rebuild_smelt_map()
                         set = {}
                         map[category] = set
                     end
-                    set[only.name] = math.max(set[only.name] or 0, only.amount)
+                    local existing = set[only.name]
+                    if not existing or only.amount >= existing.amount then
+                        set[only.name] = { amount = only.amount, energy = recipe.energy }
+                    end
                 end
             end
         end
@@ -481,10 +486,11 @@ end
 --- the recipe it last smelted — an idle furnace keeps making what it made.
 --- @param entity LuaEntity
 --- @return Ingredient[]?
+--- @return double? recipe crafting energy (seconds at crafting_speed 1)
 local function recipe_ingredients(entity)
     local recipe = entity.get_recipe()
     if recipe then
-        return recipe.ingredients
+        return recipe.ingredients, recipe.energy
     end
     if entity.type == 'furnace' then
         local previous = entity.previous_recipe
@@ -492,27 +498,28 @@ local function recipe_ingredients(entity)
         if id then
             local proto = type(id) == 'string' and prototypes.recipe[id] or id
             if proto then
-                return proto.ingredients
+                return proto.ingredients, proto.energy
             end
         end
     end
     return nil
 end
 
---- Per-craft amount of `name` in this machine's smelt-map categories (1 if unknown).
+--- Per-craft amount + recipe energy of `name` in this machine's smelt-map
+--- categories (amount 1 / energy 1 if unknown).
 --- @param proto LuaEntityPrototype
 --- @param name string
---- @return integer
-local function smelt_amount(proto, name)
+--- @return {amount: integer, energy: double}
+local function smelt_entry(proto, name)
     local map = storage.smelt_map or {}
     for category in pairs(proto.crafting_categories) do
         local set = map[category]
-        local amount = set and set[name]
-        if amount then
-            return amount
+        local entry = set and set[name]
+        if entry then
+            return entry
         end
     end
-    return 1
+    return { amount = 1, energy = 1 }
 end
 
 --- Best smeltable the player can spare for a fresh (recipe-less, empty) furnace:
@@ -521,22 +528,50 @@ end
 --- @param totals table<string, integer>
 --- @param reserves table<string, integer>
 --- @return string? name
---- @return integer? amount per craft
+--- @return {amount: integer, energy: double}? entry
 local function pick_smelt_input(proto, totals, reserves)
     local map = storage.smelt_map or {}
-    local best_name, best_amount, best_spare
+    local best_name, best_entry, best_spare
     for category in pairs(proto.crafting_categories) do
         local set = map[category]
         if set then
-            for name, amount in pairs(set) do
+            for name, entry in pairs(set) do
                 local spare = available(totals, reserves, name)
                 if spare > 0 and (not best_name or spare > best_spare or (spare == best_spare and name < best_name)) then
-                    best_name, best_amount, best_spare = name, amount, spare
+                    best_name, best_entry, best_spare = name, entry, spare
                 end
             end
         end
     end
-    return best_name, best_amount
+    return best_name, best_entry
+end
+
+--- How many crafts/research-units this entity gets through in ~FEED_SECONDS at
+--- its current speed (min 1, so a slow/unresearched entity still gets its full
+--- per-craft amount instead of a fraction). Labs have no LuaEntity.crafting_speed
+--- (that's crafter/character-only), so derive their speed from the prototype's
+--- get_researching_speed() and entity.speed_bonus (force + module/beacon effects
+--- on the lab itself — unlike the old force-modifier-only approximation, this is exact).
+--- Unlike LuaRecipe.energy (seconds at speed 1), LuaTechnology.research_unit_energy
+--- is in ticks, so it needs converting to seconds before it's comparable.
+--- @param entity LuaEntity
+--- @param energy double? recipe/research energy; nil/0 -> treat as 1 craft
+--- @return double
+local function crafts_in_window(entity, energy)
+    if not energy or energy <= 0 then
+        return 1
+    end
+    local speed
+    if entity.type == 'lab' then
+        speed = (entity.prototype.get_researching_speed(entity.quality) or 1) * (1 + entity.speed_bonus)
+        energy = energy / 60
+    else
+        speed = entity.crafting_speed
+    end
+    if not speed or speed <= 0 then
+        speed = 0.01
+    end
+    return math.max(1, FEED_SECONDS * speed / energy)
 end
 
 --- @param player LuaPlayer
@@ -548,6 +583,7 @@ end
 local function feed_ingredients_pass(player, entities, main, totals, reserves, report)
     local research = player.force.current_research
     local research_ingredients = research and research.research_unit_ingredients
+    local research_energy = research and research.research_unit_energy
     local lab_accepts = {} -- lab prototype name -> { pack name -> true }
     --- @type table<string, LbfFeedGroup>
     local groups = {}
@@ -557,11 +593,12 @@ local function feed_ingredients_pass(player, entities, main, totals, reserves, r
             if INGREDIENT_TYPES[entity_type] then
                 local input = entity.get_inventory(defines.inventory.crafter_input)
                 if input then
-                    local ingredients = recipe_ingredients(entity)
+                    local ingredients, energy = recipe_ingredients(entity)
                     if ingredients then
+                        local crafts = crafts_in_window(entity, energy)
                         for _, ingredient in pairs(ingredients) do
                             if ingredient.type == 'item' and available(totals, reserves, ingredient.name) > 0 then
-                                add_to_group(groups, ingredient.name, input, ingredient.amount * FEED_CRAFTS)
+                                add_to_group(groups, ingredient.name, input, math.ceil(ingredient.amount * crafts))
                             end
                         end
                     elseif entity_type == 'furnace' then
@@ -569,17 +606,18 @@ local function feed_ingredients_pass(player, entities, main, totals, reserves, r
                         -- from the smelt map (§1.1 pass 4).
                         local proto = entity.prototype
                         local name = first_item_name(input)
-                        local amount
+                        local entry
                         if name then
-                            amount = smelt_amount(proto, name)
+                            entry = smelt_entry(proto, name)
                             if available(totals, reserves, name) <= 0 then
                                 name = nil
                             end
                         else
-                            name, amount = pick_smelt_input(proto, totals, reserves)
+                            name, entry = pick_smelt_input(proto, totals, reserves)
                         end
-                        if name then
-                            add_to_group(groups, name, input, amount * FEED_CRAFTS)
+                        if name and entry then
+                            local crafts = crafts_in_window(entity, entry.energy)
+                            add_to_group(groups, name, input, math.ceil(entry.amount * crafts))
                         end
                     end
                 end
@@ -596,9 +634,10 @@ local function feed_ingredients_pass(player, entities, main, totals, reserves, r
                         end
                         lab_accepts[proto.name] = accepts
                     end
+                    local crafts = crafts_in_window(entity, research_energy)
                     for _, ingredient in pairs(research_ingredients) do
                         if accepts[ingredient.name] and available(totals, reserves, ingredient.name) > 0 then
-                            add_to_group(groups, ingredient.name, input, ingredient.amount * FEED_CRAFTS)
+                            add_to_group(groups, ingredient.name, input, math.ceil(ingredient.amount * crafts))
                         end
                     end
                 end
@@ -822,22 +861,21 @@ end
 -- == Reporting (DESIGN.md §4.4, §10.5) ======================================
 
 --- Pump the cycle's tally into the production graphs (collected = input,
---- fed = output on the hidden lbf-items-moved item), the global counter, and
---- — if the player opted in — one summary flying text.
+--- fed = output on the lbf-items-moved item) and the global counter every
+--- cycle; the optional flying-text summary is accumulated across cycles and
+--- only actually shown every SUMMARY_INTERVAL_TICKS — at the default ~1s
+--- per-player cycle a per-cycle flying text would be constant noise.
 --- @param player LuaPlayer
 --- @param surface LuaSurface where the transfers happened (the character's surface)
 --- @param data LbfPlayerData
 --- @param report LbfReport
 local function flush_report(player, surface, data, report)
     local collected_total, fed_total = 0, 0
-    local parts = {}
-    for name, count in pairs(report.collected) do
+    for _, count in pairs(report.collected) do
         collected_total = collected_total + count
-        parts[#parts + 1] = '[color=150,255,150]+' .. count .. '[/color] [item=' .. name .. ']'
     end
-    for name, count in pairs(report.fed) do
+    for _, count in pairs(report.fed) do
         fed_total = fed_total + count
-        parts[#parts + 1] = '[color=255,150,150]-' .. count .. '[/color] [item=' .. name .. ']'
     end
     if collected_total == 0 and fed_total == 0 then
         return
@@ -852,7 +890,31 @@ local function flush_report(player, surface, data, report)
         stats.on_flow('lbf-items-moved', -fed_total)
     end
 
-    if data.flags.summary then
+    if not data.flags.summary then
+        return
+    end
+    local summary = data.summary
+    for name, count in pairs(report.collected) do
+        summary.collected[name] = (summary.collected[name] or 0) + count
+    end
+    for name, count in pairs(report.fed) do
+        summary.fed[name] = (summary.fed[name] or 0) + count
+    end
+    if game.tick < summary.next_flush then
+        return
+    end
+    summary.next_flush = game.tick + SUMMARY_INTERVAL_TICKS
+
+    local parts = {}
+    for name, count in pairs(summary.collected) do
+        parts[#parts + 1] = '[color=150,255,150]+' .. count .. '[/color] [item=' .. name .. ']'
+    end
+    for name, count in pairs(summary.fed) do
+        parts[#parts + 1] = '[color=255,150,150]-' .. count .. '[/color] [item=' .. name .. ']'
+    end
+    summary.collected = {}
+    summary.fed = {}
+    if #parts > 0 then
         player.create_local_flying_text({
             text = table.concat(parts, '  '),
             position = player.position,

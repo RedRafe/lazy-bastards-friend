@@ -192,7 +192,7 @@ function Admin.open(player)
         },
         selected_index = 4,
     })
-    for _, mode in pairs({ 'unlock-all', 'lock-all', 'lock-offline' }) do
+    for _, mode in pairs({ 'unlock-all', 'lock-all' }) do
         bulk.add({
             type = 'button',
             caption = { 'lbf-gui.bulk-' .. mode },
@@ -251,13 +251,10 @@ end
 
 --- @param channels LbfChannel[]
 --- @param locked boolean
---- @param offline_only boolean
-local function bulk_lock(channels, locked, offline_only)
+local function bulk_lock(channels, locked)
     for _, target in pairs(game.players) do
-        if not (offline_only and target.connected) then
-            for _, channel in pairs(channels) do
-                State.set_locked(target.index, channel, locked)
-            end
+        for _, channel in pairs(channels) do
+            State.set_locked(target.index, channel, locked)
         end
     end
     State.refresh_all()
@@ -314,11 +311,9 @@ function Admin.dispatch(event)
         if frame then
             local channels = bulk_channels(frame)
             if tags.mode == 'unlock-all' then
-                bulk_lock(channels, false, false)
+                bulk_lock(channels, false)
             elseif tags.mode == 'lock-all' then
-                bulk_lock(channels, true, false)
-            elseif tags.mode == 'lock-offline' then
-                bulk_lock(channels, true, true)
+                bulk_lock(channels, true)
             end
             Admin.refresh_all()
         end

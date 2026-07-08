@@ -1,7 +1,7 @@
---- SPM watchdog (DESIGN.md §2.1): auto-retire Collect+Feed (and optionally
---- Combat) once the factory's science throughput passes the threshold. Uses the
---- built-in hidden `science` item that labs consume in production statistics —
---- no science-pack detection needed. Conditional nth-tick like the scheduler:
+--- SPM watchdog: auto-retire Collect+Feed (and optionally Combat)
+--- once the factory's science throughput passes the threshold. 
+--- Uses the built-in hidden `science` item that labs consume in production statistics.
+--- Conditional nth-tick like the scheduler:
 --- zero cost when disabled, tripped, or with nothing left to retire.
 
 local State = require('scripts.state')
