@@ -59,6 +59,16 @@ local function move_stack(stack, dest, limit)
     return inserted
 end
 
+--- Move up to `limit` items from a free-standing stack (e.g. an item-entity's)
+--- into an inventory, with the same data preservation as inventory transfers.
+--- @param stack LuaItemStack valid_for_read
+--- @param dest LuaInventory
+--- @param limit integer? defaults to the whole stack
+--- @return integer moved
+function Transfer.stack_into(stack, dest, limit)
+    return move_stack(stack, dest, limit)
+end
+
 --- Move everything that fits from `source` into `dest`.
 --- @param source LuaInventory
 --- @param dest LuaInventory

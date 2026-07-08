@@ -85,6 +85,7 @@ function Admin.sync(player)
         content['lbf-masters']['lbf-master-' .. channel].state = storage.active[channel]
     end
     content['lbf-status'].caption = status_caption(player)
+    content['lbf-moved'].caption = { 'lbf-gui.items-moved', tostring(storage.items_moved or 0) }
     rebuild_rows(frame)
 end
 
@@ -161,6 +162,7 @@ function Admin.open(player)
     end
 
     content.add({ type = 'label', name = 'lbf-status' })
+    content.add({ type = 'label', name = 'lbf-moved', tooltip = { 'lbf-gui.items-moved-tooltip' } })
     content.add({ type = 'line' })
 
     content.add({
@@ -210,6 +212,22 @@ function Admin.close(player)
     if frame then
         frame.destroy()
         storage.admin_guis[player.index] = nil
+    end
+end
+
+--- Close every open admin frame — the GUI schema may have changed
+--- (on_configuration_changed); stale frames would crash the next sync.
+function Admin.close_all()
+    if not storage.admin_guis then
+        return
+    end
+    for player_index in pairs(storage.admin_guis) do
+        local player = game.get_player(player_index)
+        if player then
+            Admin.close(player)
+        else
+            storage.admin_guis[player_index] = nil
+        end
     end
 end
 

@@ -44,6 +44,24 @@ function State.init()
     storage.scheduler = storage.scheduler or { queue = {}, cursor = 1 }
     storage.admin_guis = storage.admin_guis or {}
     storage.players = storage.players or {}
+    storage.items_moved = storage.items_moved or 0
+    -- Backfill flags added after a player's record was created (checkbox
+    -- states must be booleans, never nil), and drop reserves whose item
+    -- prototype no longer exists (mod removed).
+    for _, data in pairs(storage.players) do
+        local flags = data.flags
+        if flags.trash == nil then
+            flags.trash = false
+        end
+        if flags.summary == nil then
+            flags.summary = false
+        end
+        for name in pairs(data.reserves) do
+            if not prototypes.item[name] then
+                data.reserves[name] = nil
+            end
+        end
+    end
 end
 
 --- @class LbfPlayerData
@@ -76,7 +94,15 @@ function State.get_player_data(player_index)
             color = { r = 1, g = 0.5, b = 0, a = 1 },
             fill = true,
             opacity = 0.08,
-            flags = { fuel = true, ingredients = true, chests = false, ground = false, show_others = false },
+            flags = {
+                fuel = true,
+                ingredients = true,
+                chests = false,
+                ground = false,
+                trash = false,
+                summary = false,
+                show_others = false,
+            },
             reserves = {},
             render = {},
             idle = 0,

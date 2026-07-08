@@ -1,6 +1,9 @@
 --- The service passes (DESIGN.md §1.1): collect outputs/burnt results (+chests
---- opt-in), feed fuel, feed ammo. Ingredient feeding ships in M4. One call to
---- Raid.service handles one player for one cycle; the scheduler decides when.
+--- and ground items, opt-in), feed fuel, feed ingredients (smelt map for recipe-less
+--- furnaces), feed ammo, drain trash slots into chests. One call to Raid.service
+--- handles one player for one cycle; the scheduler decides when. Every transfer is
+--- tallied into a per-cycle report that feeds the production-graph statistics item
+--- and the optional flying-text summary (§4.4, §10.5).
 
 local State = require('scripts.state')
 local Transfer = require('scripts.lib.transfer')
@@ -11,6 +14,7 @@ local Raid = {}
 local AFK_TICKS = 5 * 60 * 60 -- after 5 min AFK, service at 1/4 rate
 local CACHE_CYCLES = 10 -- re-scan at most every N update periods
 local CACHE_MOVE_FRACTION = 0.25 -- re-scan when moved more than radius * this
+local FEED_CRAFTS = 5 -- top up ingredient inputs to ~this many crafts per machine
 
 -- Everything any pass may want; each pass filters by capability at use time
 -- (fuel inventory present, output map entry, turret ammo define).
@@ -45,20 +49,59 @@ local TURRET_AMMO_INVENTORY = {
 
 local IS_CHEST = { ['container'] = true, ['logistic-container'] = true }
 
+-- Crafter types the ingredient pass fills through defines.inventory.crafter_input.
+local INGREDIENT_TYPES = { ['furnace'] = true, ['assembling-machine'] = true, ['rocket-silo'] = true }
+
+--- Per-cycle transfer tally: item name -> count, split by direction.
+--- @class LbfReport
+--- @field collected table<string, integer> machines/ground -> player
+--- @field fed table<string, integer> player -> machines/turrets/chests
+
+-- == Smelt map (DESIGN.md §1.1 pass 4) ======================================
+
+--- Rebuild storage.smelt_map: crafting category -> { ingredient item -> per-craft
+--- amount }, from visible single-item-ingredient recipes. Hidden recipes are
+--- excluded on purpose — that keeps recycler-style categories (whose hidden
+--- recipes accept nearly every item) out of the map. Call on_init/config_changed.
+function Raid.rebuild_smelt_map()
+    local map = {}
+    for _, recipe in pairs(prototypes.recipe) do
+        if not recipe.hidden and not recipe.parameter then
+            local ingredients = recipe.ingredients
+            local only = #ingredients == 1 and ingredients[1]
+            if only and only.type == 'item' then
+                for _, category in pairs(recipe.categories) do
+                    local set = map[category]
+                    if not set then
+                        set = {}
+                        map[category] = set
+                    end
+                    set[only.name] = math.max(set[only.name] or 0, only.amount)
+                end
+            end
+        end
+    end
+    storage.smelt_map = map
+end
+
 -- == Entity cache (DESIGN.md §7) ============================================
 
 --- @param player LuaPlayer
 --- @param data LbfPlayerData
---- @param take_chests boolean
+--- @param include_chests boolean chest-take or trash-drain wants containers scanned
+--- @param include_ground boolean ground-item pickup wants item-entities scanned
 --- @return LuaEntity[]
-local function get_entities(player, data, take_chests)
+local function get_entities(player, data, include_chests, include_ground)
     local character = player.character
     local position = character.position
     local surface = character.surface
     local radius = State.get_radius(player.index)
     local period = settings.global['lbf-update-period'].value --[[@as integer]]
 
-    local key = table.concat({ surface.index, radius, data.shape, take_chests and 1 or 0 }, ':')
+    local key = table.concat(
+        { surface.index, radius, data.shape, include_chests and 1 or 0, include_ground and 1 or 0 },
+        ':'
+    )
     local cache = data.cache
     if
         cache
@@ -70,7 +113,7 @@ local function get_entities(player, data, take_chests)
     end
 
     local types = SCAN_TYPES
-    if take_chests then
+    if include_chests then
         types = {}
         for _, t in pairs(SCAN_TYPES) do
             types[#types + 1] = t
@@ -90,6 +133,16 @@ local function get_entities(player, data, take_chests)
         filter.radius = radius
     end
     local entities = surface.find_entities_filtered(filter)
+
+    if include_ground then
+        -- Item-entities are force-neutral, so they need their own unfiltered query.
+        --- @type EntitySearchFilters
+        local ground_filter = { type = 'item-entity', area = filter.area, position = filter.position, radius = filter.radius }
+        for _, entity in pairs(surface.find_entities_filtered(ground_filter)) do
+            entities[#entities + 1] = entity
+        end
+    end
+
     data.cache = { key = key, tick = game.tick, x = position.x, y = position.y, entities = entities }
     return entities
 end
@@ -117,40 +170,51 @@ local function available(totals, reserves, name)
 end
 
 --- @class LbfFeedGroup
+--- @field name string item to distribute
+--- @field cap integer? per-target cap; defaults to one stack at distribution time
 --- @field inventories LuaInventory[]
 --- @field counts integer[]
---- @field cap integer? per-target cap override when one stack is wrong (artillery)
 
---- Water-fill each item group across its target inventories, capped at one
---- stack per target, and execute the transfers. Decrements `totals` as it goes.
+--- Water-fill each item group across its target inventories, capped per target,
+--- and execute the transfers. Decrements `totals` as it goes.
 --- @param groups table<string, LbfFeedGroup>
 --- @param main LuaInventory
 --- @param totals table<string, integer>
 --- @param reserves table<string, integer>
-local function distribute_groups(groups, main, totals, reserves)
-    for name, group in pairs(groups) do
+--- @param report LbfReport
+local function distribute_groups(groups, main, totals, reserves, report)
+    local fed = report.fed
+    for _, group in pairs(groups) do
+        local name = group.name
         local budget = available(totals, reserves, name)
         if budget > 0 then
-            local cap = math.max(group.cap or 0, prototypes.item[name].stack_size)
+            local cap = group.cap or prototypes.item[name].stack_size
             local gives = Distribution.balanced_fill(group.counts, budget, cap)
             for i, give in ipairs(gives) do
                 if give > 0 then
                     local moved = Transfer.give(main, group.inventories[i], name, give)
-                    totals[name] = totals[name] - moved
+                    if moved > 0 then
+                        totals[name] = totals[name] - moved
+                        fed[name] = (fed[name] or 0) + moved
+                    end
                 end
             end
         end
     end
 end
 
+--- Targets with equal caps pool into one group; distinct caps for the same item
+--- form separate groups that share the same (decrementing) budget.
 --- @param groups table<string, LbfFeedGroup>
 --- @param name string
 --- @param inventory LuaInventory
-local function add_to_group(groups, name, inventory)
-    local group = groups[name]
+--- @param cap integer?
+local function add_to_group(groups, name, inventory, cap)
+    local key = cap and (name .. '/' .. cap) or name
+    local group = groups[key]
     if not group then
-        group = { inventories = {}, counts = {} }
-        groups[name] = group
+        group = { name = name, cap = cap, inventories = {}, counts = {} }
+        groups[key] = group
     end
     local n = #group.inventories + 1
     group.inventories[n] = inventory
@@ -250,19 +314,44 @@ end
 --- @param source LuaInventory
 --- @param dest LuaInventory
 --- @param k integer
-local function take_share(source, dest, k)
-    if k <= 1 then
-        Transfer.take_all(source, dest)
-        return
-    end
+--- @param report LbfReport
+local function take_share(source, dest, k, report)
     local totals = {}
     for _, item in pairs(source.get_contents()) do
         totals[item.name] = (totals[item.name] or 0) + item.count
     end
+    local collected = report.collected
     for name, count in pairs(totals) do
-        local share = math.floor(count / k)
+        local share = k > 1 and math.floor(count / k) or count
         if share > 0 then
-            Transfer.give(source, dest, name, share)
+            local moved = Transfer.give(source, dest, name, share)
+            if moved > 0 then
+                collected[name] = (collected[name] or 0) + moved
+            end
+        end
+    end
+end
+
+--- Scoop one ground stack whole — no fair-share split; a single dropped stack
+--- is not worth the shape checks.
+--- @param entity LuaEntity item-entity
+--- @param main LuaInventory
+--- @param report LbfReport
+local function take_ground_item(entity, main, report)
+    local stack = entity.stack
+    if not (stack and stack.valid_for_read) then
+        return
+    end
+    local name = stack.name
+    local moved = Transfer.stack_into(stack, main)
+    if moved > 0 then
+        report.collected[name] = (report.collected[name] or 0) + moved
+    end
+    -- Emptying the stack usually removes the entity; sweep up if it lingers.
+    if entity.valid then
+        local rest = entity.stack
+        if not (rest and rest.valid_for_read) then
+            entity.destroy()
         end
     end
 end
@@ -271,26 +360,31 @@ end
 --- @param main LuaInventory
 --- @param take_chests boolean
 --- @param rivals LbfRival[]?
-local function collect_pass(entities, main, take_chests, rivals)
+--- @param report LbfReport
+local function collect_pass(entities, main, take_chests, rivals, report)
     for _, entity in pairs(entities) do
         if entity.valid then
-            local is_chest = IS_CHEST[entity.type]
-            local k = rivals and claim_divisor(entity, rivals, is_chest or false) or 1
-            local output_define = OUTPUT_INVENTORY[entity.type]
-            if output_define then
-                local output = entity.get_inventory(output_define)
-                if output and not output.is_empty() then
-                    take_share(output, main, k)
+            if entity.type == 'item-entity' then
+                take_ground_item(entity, main, report)
+            else
+                local is_chest = IS_CHEST[entity.type]
+                local k = rivals and claim_divisor(entity, rivals, is_chest or false) or 1
+                local output_define = OUTPUT_INVENTORY[entity.type]
+                if output_define then
+                    local output = entity.get_inventory(output_define)
+                    if output and not output.is_empty() then
+                        take_share(output, main, k, report)
+                    end
                 end
-            end
-            local burnt = entity.get_burnt_result_inventory()
-            if burnt and not burnt.is_empty() then
-                take_share(burnt, main, k)
-            end
-            if take_chests and is_chest then
-                local chest = entity.get_inventory(defines.inventory.chest)
-                if chest and not chest.is_empty() then
-                    take_share(chest, main, k)
+                local burnt = entity.get_burnt_result_inventory()
+                if burnt and not burnt.is_empty() then
+                    take_share(burnt, main, k, report)
+                end
+                if take_chests and is_chest then
+                    local chest = entity.get_inventory(defines.inventory.chest)
+                    if chest and not chest.is_empty() then
+                        take_share(chest, main, k, report)
+                    end
                 end
             end
         end
@@ -362,7 +456,8 @@ end
 --- @param main LuaInventory
 --- @param totals table<string, integer>
 --- @param reserves table<string, integer>
-local function feed_fuel_pass(entities, main, totals, reserves)
+--- @param report LbfReport
+local function feed_fuel_pass(entities, main, totals, reserves, report)
     local fuels = get_player_fuels(totals, reserves)
     --- @type table<string, LbfFeedGroup>
     local groups = {}
@@ -377,7 +472,140 @@ local function feed_fuel_pass(entities, main, totals, reserves)
             end
         end
     end
-    distribute_groups(groups, main, totals, reserves)
+    distribute_groups(groups, main, totals, reserves, report)
+end
+
+-- == Pass 4: feed ingredients ===============================================
+
+--- Item requirements of the machine's set recipe: the active one, or (furnaces)
+--- the recipe it last smelted — an idle furnace keeps making what it made.
+--- @param entity LuaEntity
+--- @return Ingredient[]?
+local function recipe_ingredients(entity)
+    local recipe = entity.get_recipe()
+    if recipe then
+        return recipe.ingredients
+    end
+    if entity.type == 'furnace' then
+        local previous = entity.previous_recipe
+        local id = previous and previous.name
+        if id then
+            local proto = type(id) == 'string' and prototypes.recipe[id] or id
+            if proto then
+                return proto.ingredients
+            end
+        end
+    end
+    return nil
+end
+
+--- Per-craft amount of `name` in this machine's smelt-map categories (1 if unknown).
+--- @param proto LuaEntityPrototype
+--- @param name string
+--- @return integer
+local function smelt_amount(proto, name)
+    local map = storage.smelt_map or {}
+    for category in pairs(proto.crafting_categories) do
+        local set = map[category]
+        local amount = set and set[name]
+        if amount then
+            return amount
+        end
+    end
+    return 1
+end
+
+--- Best smeltable the player can spare for a fresh (recipe-less, empty) furnace:
+--- the most abundant spare input its categories accept, name as tiebreak.
+--- @param proto LuaEntityPrototype
+--- @param totals table<string, integer>
+--- @param reserves table<string, integer>
+--- @return string? name
+--- @return integer? amount per craft
+local function pick_smelt_input(proto, totals, reserves)
+    local map = storage.smelt_map or {}
+    local best_name, best_amount, best_spare
+    for category in pairs(proto.crafting_categories) do
+        local set = map[category]
+        if set then
+            for name, amount in pairs(set) do
+                local spare = available(totals, reserves, name)
+                if spare > 0 and (not best_name or spare > best_spare or (spare == best_spare and name < best_name)) then
+                    best_name, best_amount, best_spare = name, amount, spare
+                end
+            end
+        end
+    end
+    return best_name, best_amount
+end
+
+--- @param player LuaPlayer
+--- @param entities LuaEntity[]
+--- @param main LuaInventory
+--- @param totals table<string, integer>
+--- @param reserves table<string, integer>
+--- @param report LbfReport
+local function feed_ingredients_pass(player, entities, main, totals, reserves, report)
+    local research = player.force.current_research
+    local research_ingredients = research and research.research_unit_ingredients
+    local lab_accepts = {} -- lab prototype name -> { pack name -> true }
+    --- @type table<string, LbfFeedGroup>
+    local groups = {}
+    for _, entity in pairs(entities) do
+        if entity.valid then
+            local entity_type = entity.type
+            if INGREDIENT_TYPES[entity_type] then
+                local input = entity.get_inventory(defines.inventory.crafter_input)
+                if input then
+                    local ingredients = recipe_ingredients(entity)
+                    if ingredients then
+                        for _, ingredient in pairs(ingredients) do
+                            if ingredient.type == 'item' and available(totals, reserves, ingredient.name) > 0 then
+                                add_to_group(groups, ingredient.name, input, ingredient.amount * FEED_CRAFTS)
+                            end
+                        end
+                    elseif entity_type == 'furnace' then
+                        -- No recipe history: top up what's loaded, else infer
+                        -- from the smelt map (§1.1 pass 4).
+                        local proto = entity.prototype
+                        local name = first_item_name(input)
+                        local amount
+                        if name then
+                            amount = smelt_amount(proto, name)
+                            if available(totals, reserves, name) <= 0 then
+                                name = nil
+                            end
+                        else
+                            name, amount = pick_smelt_input(proto, totals, reserves)
+                        end
+                        if name then
+                            add_to_group(groups, name, input, amount * FEED_CRAFTS)
+                        end
+                    end
+                end
+            elseif entity_type == 'lab' and research_ingredients then
+                -- Feed only what current research consumes and this lab accepts.
+                local input = entity.get_inventory(defines.inventory.lab_input)
+                if input then
+                    local proto = entity.prototype
+                    local accepts = lab_accepts[proto.name]
+                    if not accepts then
+                        accepts = {}
+                        for _, name in pairs(proto.lab_inputs or {}) do
+                            accepts[name] = true
+                        end
+                        lab_accepts[proto.name] = accepts
+                    end
+                    for _, ingredient in pairs(research_ingredients) do
+                        if accepts[ingredient.name] and available(totals, reserves, ingredient.name) > 0 then
+                            add_to_group(groups, ingredient.name, input, ingredient.amount * FEED_CRAFTS)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    distribute_groups(groups, main, totals, reserves, report)
 end
 
 -- == Pass 5: feed ammo ======================================================
@@ -452,7 +680,8 @@ end
 --- @param main LuaInventory
 --- @param totals table<string, integer>
 --- @param reserves table<string, integer>
-local function feed_ammo_pass(entities, main, totals, reserves)
+--- @param report LbfReport
+local function feed_ammo_pass(entities, main, totals, reserves, report)
     local candidates = get_player_ammo(totals, reserves)
     --- @type table<string, LbfFeedGroup>
     local groups = {}
@@ -464,20 +693,171 @@ local function feed_ammo_pass(entities, main, totals, reserves)
                 if ammo_inventory then
                     local name = pick_ammo(turret, ammo_inventory, candidates, totals, reserves)
                     if name then
-                        add_to_group(groups, name, ammo_inventory)
                         -- One stack is the wrong ceiling for artillery (shells
                         -- stack to 1): allow what inserters would load instead.
-                        local group = groups[name]
-                        local automated = turret.prototype.automated_ammo_count or 0
-                        if automated > (group.cap or 0) then
-                            group.cap = automated
-                        end
+                        local cap = math.max(
+                            turret.prototype.automated_ammo_count or 0,
+                            prototypes.item[name].stack_size
+                        )
+                        add_to_group(groups, name, ammo_inventory, cap)
                     end
                 end
             end
         end
     end
-    distribute_groups(groups, main, totals, reserves)
+    distribute_groups(groups, main, totals, reserves, report)
+end
+
+-- == Trash-slot drain (DESIGN.md §10.3) =====================================
+
+--- @class LbfChestTarget
+--- @field entity LuaEntity
+--- @field inventory LuaInventory
+--- @field requests table<string, boolean>? requested/filtered item names
+--- @field accepts_any boolean not pull-only and not filtered to specific items
+
+--- Classify the chests in the service area as drain targets. Requester/buffer
+--- chests and filtered storage chests only ever receive what they ask for.
+--- @param entities LuaEntity[]
+--- @return LbfChestTarget[]?
+local function chest_targets(entities)
+    local targets
+    for _, entity in pairs(entities) do
+        if entity.valid and IS_CHEST[entity.type] then
+            local inventory = entity.get_inventory(defines.inventory.chest)
+            if inventory then
+                local mode = entity.prototype.logistic_mode
+                local requests
+                local point = entity.get_logistic_point(defines.logistic_member_index.logistic_container)
+                if point then
+                    local filters = point.filters
+                    if filters then
+                        for _, filter in pairs(filters) do
+                            if filter.name and (filter.count or 0) > 0 then
+                                requests = requests or {}
+                                requests[filter.name] = true
+                            end
+                        end
+                    end
+                end
+                if mode == 'storage' then
+                    local storage_filter = entity.storage_filter
+                    if storage_filter then
+                        -- ID pairs read back with prototype objects, not strings.
+                        local item = storage_filter.name
+                        requests = requests or {}
+                        requests[type(item) == 'string' and item or item.name] = true
+                    end
+                end
+                local pull_only = mode == 'requester' or mode == 'buffer'
+                targets = targets or {}
+                targets[#targets + 1] = {
+                    entity = entity,
+                    inventory = inventory,
+                    requests = requests,
+                    accepts_any = not pull_only and requests == nil,
+                }
+            end
+        end
+    end
+    return targets
+end
+
+--- Chest priority for one item (§10.3 — never dump blindly): 1. chests already
+--- holding it, 2. chests requesting/filtered to it, 3. empty unfiltered chests.
+--- @param target LbfChestTarget
+--- @param name string
+--- @param tier integer
+--- @return boolean
+local function drain_tier_match(target, name, tier)
+    local requested = target.requests and target.requests[name]
+    if tier == 1 then
+        return (requested or target.accepts_any) and Transfer.count_by_name(target.inventory, name) > 0
+    elseif tier == 2 then
+        return requested == true
+    end
+    return target.accepts_any and target.inventory.is_empty() and not target.inventory.is_filtered()
+end
+
+--- Move everything from the player's logistic trash into nearby chests.
+--- @param player LuaPlayer
+--- @param entities LuaEntity[]
+--- @param report LbfReport
+local function trash_pass(player, entities, report)
+    local trash = player.get_inventory(defines.inventory.character_trash)
+    if not trash or trash.is_empty() then
+        return
+    end
+    local targets = chest_targets(entities)
+    if not targets then
+        return
+    end
+    local totals = {}
+    for _, item in pairs(trash.get_contents()) do
+        totals[item.name] = (totals[item.name] or 0) + item.count
+    end
+    local fed = report.fed
+    for name, count in pairs(totals) do
+        local remaining = count
+        for tier = 1, 3 do
+            if remaining <= 0 then
+                break
+            end
+            for _, target in pairs(targets) do
+                if remaining <= 0 then
+                    break
+                end
+                if target.entity.valid and drain_tier_match(target, name, tier) then
+                    local moved = Transfer.give(trash, target.inventory, name, remaining)
+                    if moved > 0 then
+                        remaining = remaining - moved
+                        fed[name] = (fed[name] or 0) + moved
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- == Reporting (DESIGN.md §4.4, §10.5) ======================================
+
+--- Pump the cycle's tally into the production graphs (collected = input,
+--- fed = output on the hidden lbf-items-moved item), the global counter, and
+--- — if the player opted in — one summary flying text.
+--- @param player LuaPlayer
+--- @param surface LuaSurface where the transfers happened (the character's surface)
+--- @param data LbfPlayerData
+--- @param report LbfReport
+local function flush_report(player, surface, data, report)
+    local collected_total, fed_total = 0, 0
+    local parts = {}
+    for name, count in pairs(report.collected) do
+        collected_total = collected_total + count
+        parts[#parts + 1] = '[color=150,255,150]+' .. count .. '[/color] [item=' .. name .. ']'
+    end
+    for name, count in pairs(report.fed) do
+        fed_total = fed_total + count
+        parts[#parts + 1] = '[color=255,150,150]-' .. count .. '[/color] [item=' .. name .. ']'
+    end
+    if collected_total == 0 and fed_total == 0 then
+        return
+    end
+
+    storage.items_moved = (storage.items_moved or 0) + collected_total + fed_total
+    local stats = player.force.get_item_production_statistics(surface)
+    if collected_total > 0 then
+        stats.on_flow('lbf-items-moved', collected_total)
+    end
+    if fed_total > 0 then
+        stats.on_flow('lbf-items-moved', -fed_total)
+    end
+
+    if data.flags.summary then
+        player.create_local_flying_text({
+            text = table.concat(parts, '  '),
+            position = player.position,
+        })
+    end
 end
 
 -- == Entry point ============================================================
@@ -509,29 +889,46 @@ function Raid.service(player, pending)
         return
     end
 
+    local flags = data.flags
     local collect = State.effective(player.index, 'collect')
-    local feed = State.effective(player.index, 'feed') and data.flags.fuel
+    local feed = State.effective(player.index, 'feed')
     local combat = State.effective(player.index, 'combat')
-    if not (collect or feed or combat) then
+    local feed_fuel = feed and flags.fuel
+    local feed_ingredients = feed and flags.ingredients
+    local take_chests = collect and flags.chests and settings.global['lbf-allow-chest-take'].value == true
+    -- Chest-take wins over trash drain: draining trash into a chest we raid
+    -- back next cycle would churn items in a loop (auto-trash re-trashes them).
+    local drain_trash = feed and flags.trash and not take_chests
+    local take_ground = collect and flags.ground
+
+    if not (collect or feed_fuel or feed_ingredients or combat or drain_trash) then
         return
     end
 
-    local take_chests = collect and data.flags.chests and settings.global['lbf-allow-chest-take'].value == true
-    local entities = get_entities(player, data, take_chests)
+    local entities = get_entities(player, data, take_chests or drain_trash, take_ground)
+    --- @type LbfReport
+    local report = { collected = {}, fed = {} }
 
     if collect then
-        collect_pass(entities, main, take_chests, get_rivals(player, pending))
+        collect_pass(entities, main, take_chests, get_rivals(player, pending), report)
     end
-    if feed or combat then
+    if feed_fuel or feed_ingredients or combat then
         local totals = inventory_totals(main)
         local reserves = data.reserves
-        if feed then
-            feed_fuel_pass(entities, main, totals, reserves)
+        if feed_fuel then
+            feed_fuel_pass(entities, main, totals, reserves, report)
+        end
+        if feed_ingredients then
+            feed_ingredients_pass(player, entities, main, totals, reserves, report)
         end
         if combat then
-            feed_ammo_pass(entities, main, totals, reserves)
+            feed_ammo_pass(entities, main, totals, reserves, report)
         end
     end
+    if drain_trash then
+        trash_pass(player, entities, report)
+    end
+    flush_report(player, character.surface, data, report)
 end
 
 return Raid

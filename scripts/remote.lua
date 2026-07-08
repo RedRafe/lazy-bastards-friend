@@ -30,6 +30,26 @@ local function copy_channels(channels)
     return { collect = channels.collect, feed = channels.feed, combat = channels.combat }
 end
 
+-- Behavior flags exposed through set_player_flag / get_player_state.
+local FLAG_NAMES = {
+    fuel = true,
+    ingredients = true,
+    chests = true,
+    ground = true,
+    trash = true,
+    summary = true,
+    show_others = true,
+}
+
+--- @param flag any
+--- @return string
+local function check_flag(flag)
+    if not FLAG_NAMES[flag] then
+        error("lazy-bastards-friend: unknown flag '" .. tostring(flag) .. "' (see docs/API.md)")
+    end
+    return flag
+end
+
 remote.add_interface('lazy-bastards-friend', {
     --- Global master switch for one channel. Enabling re-arms the SPM watchdog.
     --- @param channel LbfChannel
@@ -79,14 +99,29 @@ remote.add_interface('lazy-bastards-friend', {
         for name, count in pairs(data.reserves) do
             reserves[name] = count
         end
+        local flags = {}
+        for name in pairs(FLAG_NAMES) do
+            flags[name] = data.flags[name] == true
+        end
         return {
             enabled = copy_channels(data.enabled),
             locked = copy_channels(data.locked),
             effective = effective,
             radius = State.get_radius(player.index),
             shape = data.shape,
+            flags = flags,
             reserves = reserves,
         }
+    end,
+
+    --- A player's behavior toggle, as if they clicked it in their panel.
+    --- @param player_index uint
+    --- @param flag string see FLAG_NAMES / docs/API.md
+    --- @param value boolean
+    set_player_flag = function(player_index, flag, value)
+        local player = check_player(player_index)
+        State.get_player_data(player.index).flags[check_flag(flag)] = value == true
+        State.refresh(player)
     end,
 
     --- Clamped to the lbf-min-radius / lbf-max-radius map settings.

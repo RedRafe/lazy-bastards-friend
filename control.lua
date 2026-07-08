@@ -8,6 +8,7 @@ local AdminGui = require('scripts.gui.admin')
 local Shortcut = require('scripts.shortcut')
 local Scheduler = require('scripts.scheduler')
 local Watchdog = require('scripts.watchdog')
+local Raid = require('scripts.raid')
 require('scripts.remote')
 
 State.add_refresh_handler(Rendering.refresh)
@@ -50,6 +51,7 @@ end
 
 script.on_init(function()
     State.init()
+    Raid.rebuild_smelt_map()
     for _, player in pairs(game.players) do
         setup_player(player)
     end
@@ -58,6 +60,8 @@ end)
 
 script.on_configuration_changed(function()
     State.init()
+    Raid.rebuild_smelt_map()
+    AdminGui.close_all() -- schemas may have changed; stale frames crash sync
     for _, player in pairs(game.players) do
         RelativeGui.build(player)
         State.refresh(player)
@@ -174,6 +178,8 @@ on(defines.events.on_runtime_mod_setting_changed, function(event)
         end
     elseif event.setting == 'lbf-min-radius' or event.setting == 'lbf-max-radius' then
         State.refresh_all() -- re-clamp slider bounds and drawn radii everywhere
+    elseif event.setting == 'lbf-allow-chest-take' then
+        State.refresh_all() -- grey out / restore the per-player chest checkbox
     elseif event.setting == 'lbf-update-period' then
         Scheduler.rebuild() -- recompute the nth-tick interval
     elseif
@@ -192,6 +198,10 @@ end)
 on(defines.events.on_gui_checked_state_changed, RelativeGui.dispatch)
 on(defines.events.on_gui_checked_state_changed, AdminGui.dispatch)
 on(defines.events.on_gui_value_changed, RelativeGui.dispatch)
+on(defines.events.on_gui_click, RelativeGui.dispatch)
 on(defines.events.on_gui_click, AdminGui.dispatch)
+on(defines.events.on_gui_selection_state_changed, RelativeGui.dispatch)
+on(defines.events.on_gui_elem_changed, RelativeGui.dispatch)
+on(defines.events.on_gui_text_changed, RelativeGui.dispatch)
 on(defines.events.on_gui_switch_state_changed, AdminGui.dispatch)
 on(defines.events.on_gui_closed, AdminGui.on_gui_closed)

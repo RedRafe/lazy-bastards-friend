@@ -29,13 +29,17 @@ local BENCH = {
     { name = 'artillery-turret', position = { 4, 6 } },
     { name = 'boiler', position = { 10, 6 } },
     { name = 'burner-inserter', position = { 6, 12 } },
-    -- Chest row: loot target (opt-in chest take) + empty chest (M4 trash drain)
+    -- Chest row: loot target (opt-in chest take); the empty iron chest is a
+    -- tier-3 trash-drain target, the wooden one a tier-1 target for coal/plates
     { name = 'wooden-chest', position = { -2, 12 }, items = { [defines.inventory.chest] = { ['coal'] = 50, ['iron-plate'] = 100 } } },
     { name = 'iron-chest', position = { 2, 12 } },
-    -- Powered assembler crafting gears (collect pass now, ingredient pass in M4)
+    -- Powered assemblers: one pre-fed (collect pass), one starving with a set
+    -- recipe (ingredient pass feeds copper plates from the kit)
     { name = 'assembling-machine-1', position = { 10, 12 }, recipe = 'iron-gear-wheel', items = { [defines.inventory.crafter_input] = { ['iron-plate'] = 40 } } },
-    -- Labs for the SPM watchdog (M3): research is queued but the labs start
-    -- empty — insert packs from the kit to make science flow and trip it.
+    { name = 'assembling-machine-1', position = { 10, 16 }, recipe = 'copper-cable' },
+    -- Labs for the SPM watchdog (M3): research is queued and the labs start
+    -- empty — the M4 ingredient pass feeds them packs from the kit, so standing
+    -- in range makes science flow and trips the (lowered) watchdog by itself.
     { name = 'lab', position = { 15, 12 } },
     { name = 'lab', position = { 15, 15 } },
     { name = 'medium-electric-pole', position = { 12.5, 12.5 } },
@@ -51,6 +55,7 @@ local KIT = {
     ['solid-fuel'] = 20,
     ['iron-ore'] = 100,
     ['iron-plate'] = 200,
+    ['copper-plate'] = 100,
     ['firearm-magazine'] = 60,
     ['piercing-rounds-magazine'] = 40,
     ['artillery-shell'] = 10,
@@ -118,6 +123,8 @@ script.on_init(function()
     game.forces.player.technologies['steam-power'].researched = true
     game.forces.player.technologies['electronics'].researched = true
     game.forces.player.technologies['automation-science-pack'].researched = true
+    -- Character logistics (trash slots) for the M4 trash-drain pass.
+    game.forces.player.technologies['logistic-robotics'].researched = true
     game.forces.player.add_research('automation')
     remote.call('lazy-bastards-friend', 'set_spm_threshold', 5)
 end)
@@ -136,7 +143,8 @@ script.on_event(defines.events.on_player_created, function(event)
 
     player.game_view_settings.show_entity_info = true
 
-    player.print('[color=yellow]LBF test bench[/color]: furnaces north, turrets south, chests + assembler south-east.')
-    player.print('Reserves: /c __lazy-bastards-friend__ storage.players[' .. player.index .. "].reserves['coal'] = 50")
-    player.print('Watchdog: threshold is lowered to 5 SPM — put science packs into the labs south-east and it should retire the mod in ~30s. Admin panel: /lbf-admin or the button in the character-screen side panel.')
+    player.print('[color=yellow]LBF test bench[/color]: furnaces north, turrets south, chests + assemblers + labs south-east.')
+    player.print('M4: the ingredient pass feeds the empty furnaces/assembler/labs from your kit. Reserves, appearance and behavior toggles live in the panel next to your character screen (open your inventory).')
+    player.print('Trash drain: put items in your logistic trash slots, enable "Empty trash into chests" — they land in the chest row. Transfer summary: enable "Show transfer summary".')
+    player.print('Watchdog: threshold is lowered to 5 SPM — standing near the labs feeds them packs and should retire the mod in ~40s (turn off "Feed ingredients" or your Feed channel to avoid that while testing). Admin panel: /lbf-admin.')
 end)

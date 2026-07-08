@@ -17,7 +17,8 @@ arguments raise a Lua error with a `lazy-bastards-friend:` prefix — wrap in
   string name:
   - `'collect'` — pull finished products / burnt results (and opt-in chest
     contents) from machines into the player's inventory.
-  - `'feed'` — push fuel (and later ingredients) from the player into machines.
+  - `'feed'` — push fuel and ingredients from the player into machines (and
+    opt-in, drain their trash slots into chests).
   - `'combat'` — keep turrets topped up with ammo.
 - **Tri-state activation** — a channel actually runs for a player only if all
   three are true: the global master is on (`set_active`), the player is not
@@ -93,11 +94,35 @@ Full per-player state:
   effective = { collect = true,  feed = true,  combat = true },  -- what actually runs
   radius    = 16,          -- service radius, tiles (already clamped)
   shape     = 'circle',    -- 'circle' | 'square'
+  flags     = {            -- behavior toggles (see set_player_flag)
+    fuel = true, ingredients = true, chests = false, ground = false,
+    trash = false, summary = false, show_others = false,
+  },
   reserves  = { ['coal'] = 50 },  -- item name -> protected minimum
 }
 ```
 
 The returned table is a copy — mutating it does nothing.
+
+### `set_player_flag(player_index, flag, value)`
+
+Set one of the player's behavior toggles, exactly as if they clicked it in
+their panel. Valid flag names:
+
+| flag | default | |
+|---|---|---|
+| `'fuel'` | `true` | Feed channel tops up burners with fuel |
+| `'ingredients'` | `true` | Feed channel fills machine inputs (recipes, smeltables, science packs) |
+| `'chests'` | `false` | Collect channel also empties chests (needs the `lbf-allow-chest-take` map setting) |
+| `'ground'` | `false` | Collect channel also picks up items on the ground |
+| `'trash'` | `false` | Feed channel drains logistic trash slots into nearby chests (paused while `chests` is active) |
+| `'summary'` | `false` | show a per-cycle floating summary of what was moved |
+| `'show_others'` | `false` | the player's area render is visible to everyone |
+
+```lua
+-- Scenario hands out pre-configured chest raiding:
+remote.call('lazy-bastards-friend', 'set_player_flag', 1, 'chests', true)
+```
 
 ### `set_player_radius(player_index, radius)`
 
