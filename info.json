@@ -1,0 +1,14 @@
+{
+  "name": "factorio-mod-template",
+  "version": "0.1.0",
+  "title": "Factorio Mod Template",
+  "author": "RedRafe",
+  "source": "https://github.com/RedRafe/factorio-mod-template",
+  "homepage": "https://mods.factorio.com/mod/factorio-mod-template",
+  "contact": "Discord: @redrafe",
+  "dependencies": [
+    "base >= 2.1"
+  ],
+  "description": "A ready-to-use template for Factorio mods",
+  "factorio_version": "2.1"
+}

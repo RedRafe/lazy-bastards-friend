@@ -1,0 +1,11 @@
+---------------------------------------------------------------------------------------------------
+Version: 0.1.0
+Date: 2022.12.31
+  Info:
+    - initial release
+  Changes:
+    - changed X
+  Features:
+    - added feature A
+  Bugfixes:
+    - fixed issue #1

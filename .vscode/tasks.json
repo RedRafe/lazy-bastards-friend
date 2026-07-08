@@ -1,0 +1,25 @@
+{
+  // See https://go.microsoft.com/fwlink/?LinkId=733558
+  // for the documentation about the tasks.json format
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Export",
+      "type": "shell",
+      "command": "chmod +x ./.vscode/tasks/export.sh ; ./.vscode/tasks/export.sh",
+      "group": "build",
+    },
+    {
+      "label": "Copy",
+      "type": "shell",
+      "command": "chmod +x ./.vscode/tasks/copy.sh ; ./.vscode/tasks/copy.sh",
+      "group": "build",
+    },
+    {
+      "label": "Clear all",
+      "type": "shell",
+      "command": "chmod +x ./.vscode/tasks/clear.sh ; ./.vscode/tasks/clear.sh",
+      "group": "build",
+    },
+  ]
+}
