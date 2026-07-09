@@ -27,6 +27,7 @@ local KIT = {
 Event.on_init(function()
     local surface = game.surfaces['nauvis']
     surface.peaceful_mode = true
+    game.speed = 10 -- fuel burn-down is the whole test; run it faster than realtime
     Bench.prepare_area(surface, AREA, game.forces.player)
     Bench.spawn(surface, game.forces.player, BENCH)
 end)
@@ -52,14 +53,15 @@ Event.add(defines.events.on_player_created, function(event)
             end
         end
         return false
-    end, 3600)
+    end, 900)
 
     -- Long-lived guard: any tick where the reserve is violated is an immediate,
     -- permanent failure, so this fails as soon as it happens rather than
-    -- polling once at a fixed deadline.
+    -- polling once at a fixed deadline. 1800 ticks is still ample time for the
+    -- feed pass to burn through the spendable 10 coal above the reserve.
     Harness.watch('reserve never dips below ' .. RESERVE_AMOUNT .. ' coal', function()
         return player.get_main_inventory().get_item_count(RESERVE_ITEM) < RESERVE_AMOUNT
-    end, 3600)
+    end, 1800)
 
-    Harness.summary_after(3660)
+    Harness.summary_after(1860)
 end)

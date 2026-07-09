@@ -117,11 +117,16 @@ function Harness.summary_after(delay_ticks)
     end)
 end
 
---- Ends the scenario with a Factorio-native win/lose screen, listing every
---- test and its result as bullet points. Mirrors how base's silo-script.lua
---- and the community "Better Victory Screen" mod report level completion via
---- game.set_win_ending_info / set_lose_ending_info + game.set_game_state,
---- instead of leaving the tally in chat scrollback.
+--- Ends the scenario with a Factorio-native win screen (all checks passed) or
+--- just prints a chat summary (any failure), listing every test and its
+--- result. Mirrors how base's silo-script.lua and the community "Better
+--- Victory Screen" mod report level completion via game.set_win_ending_info +
+--- game.set_game_state, instead of leaving the tally in chat scrollback.
+--- On failure we deliberately skip the game_finished modal — `can_continue`
+--- on a lose screen isn't reliably resumable client-side, and freezing the
+--- view is the opposite of what you want while poking at the admin GUI to
+--- see why a check failed. The on-screen panel (scripts/tests/lib/gui.lua)
+--- already shows the FAIL marks live, and the game keeps running normally.
 --- @param passed integer
 --- @param failed integer
 function Harness.end_scenario(passed, failed)
@@ -133,8 +138,8 @@ function Harness.end_scenario(passed, failed)
     local total = passed + failed
     local summary = string.format('%d/%d checks passed.', passed, total)
 
-    game.reset_game_state()
     if failed == 0 then
+        game.reset_game_state()
         game.set_win_ending_info({
             title = 'All tests passed',
             message = summary,
@@ -143,13 +148,10 @@ function Harness.end_scenario(passed, failed)
         })
         game.set_game_state({ game_finished = true, player_won = true, can_continue = true })
     else
-        game.set_lose_ending_info({
-            title = string.format('%d test(s) failed', failed),
-            message = summary,
-            bullet_points = bullet_points,
-            final_message = 'Fix the failing check(s) and re-run the level.',
-        })
-        game.set_game_state({ game_finished = true, player_won = false, can_continue = true })
+        game.print(string.format('[color=220,0,0]%d test(s) failed[/color] — %s', failed, summary))
+        for _, line in pairs(bullet_points) do
+            game.print(line)
+        end
     end
 end
 

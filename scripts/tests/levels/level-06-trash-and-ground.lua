@@ -12,7 +12,7 @@ local AREA = { { -12, -8 }, { 12, 8 } }
 
 local BENCH = {
     { name = 'iron-chest', position = { -8, -4 }, items = { [defines.inventory.chest] = { ['coal'] = 10 } } }, -- priority 1: same-item chest
-    { name = 'iron-chest', position = { -2, -4 } }, -- priority 2: filtered for stone, set below
+    { name = 'storage-chest', position = { -2, -4 } }, -- priority 2: filtered for stone, set below
     { name = 'iron-chest', position = { 4, -4 } }, -- priority 3: empty, unfiltered
 }
 
@@ -26,12 +26,11 @@ Event.on_init(function()
     surface.peaceful_mode = true
     Bench.prepare_area(surface, AREA, game.forces.player)
     local built = Bench.spawn(surface, game.forces.player, BENCH)
-    built['-2,-4'].get_inventory(defines.inventory.chest).set_bar(1)
-    built['-2,-4'].get_inventory(defines.inventory.chest).set_filter(1, { name = 'stone' })
+    built['-2,-4'].storage_filter = 'stone'
     Bench.research(game.forces.player, { 'logistic-robotics' }) -- unlocks personal trash slots
 
-    surface.spawn_item({ position = { 8, -4 }, name = 'iron-plate', count = 20 })
-    surface.spawn_item({ position = { 10, -4 }, name = 'copper-plate', count = 20 })
+    surface.spill_item_stack({ position = { 8, -4 }, stack = { name = 'iron-plate', count = 20 }, enable_looted = false })
+    surface.spill_item_stack({ position = { 10, -4 }, stack = { name = 'copper-plate', count = 20 }, enable_looted = false })
 end)
 
 Bench.on_player_created(KIT, 'L06 trash & ground', {

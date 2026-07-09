@@ -120,7 +120,9 @@ remote.add_interface('lazy-bastards-friend', {
     --- @param value boolean
     set_player_flag = function(player_index, flag, value)
         local player = check_player(player_index)
-        State.get_player_data(player.index).flags[check_flag(flag)] = value == true
+        check_flag(flag)
+        State.get_player_data(player.index).flags[flag] = value == true
+        State.push_setting(player, State.flag_setting[flag])
         State.refresh(player)
     end,
 

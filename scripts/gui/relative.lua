@@ -16,15 +16,7 @@ local FRAME_NAME = 'lbf-relative'
 local BEHAVIOR_FLAGS = { 'fuel', 'ingredients', 'chests', 'ground', 'trash', 'summary' }
 
 -- Per-player mod setting each behavior flag mirrors (State.push_setting, §8).
-local FLAG_SETTING = {
-    fuel = 'lbf-feed-fuel',
-    ingredients = 'lbf-feed-ingredients',
-    chests = 'lbf-take-chests',
-    ground = 'lbf-pickup-ground',
-    trash = 'lbf-drain-trash',
-    summary = 'lbf-show-summary',
-    show_others = 'lbf-show-to-others',
-}
+local FLAG_SETTING = State.flag_setting
 
 -- Logistic group whose minimum values the import button copies into reserves (§6).
 local IMPORT_GROUP = 'LBF'

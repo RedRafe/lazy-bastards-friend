@@ -176,6 +176,19 @@ local PLAYER_SETTINGS = {
 }
 State.player_settings = PLAYER_SETTINGS
 
+-- Per-player mod setting each behavior flag mirrors (relative-gui / remote API, §8).
+-- Shared so anything writing to data.flags[<flag>] can push the same setting
+-- the relative-gui checkbox would have (State.push_setting).
+State.flag_setting = {
+    fuel = 'lbf-feed-fuel',
+    ingredients = 'lbf-feed-ingredients',
+    chests = 'lbf-take-chests',
+    ground = 'lbf-pickup-ground',
+    trash = 'lbf-drain-trash',
+    summary = 'lbf-show-summary',
+    show_others = 'lbf-show-to-others',
+}
+
 --- Read one per-player mod setting into storage (settings screen -> storage).
 --- @param player LuaPlayer
 --- @param name string
