@@ -113,7 +113,7 @@ end
 --- @param tag string short level tag, e.g. "L01 fuel feed"
 --- @param lines string[]
 function Bench.intro(player, tag, lines)
-    Gui.set_header('LBF test bench — ' .. tag, lines)
+    Gui.set_header('LBF test — ' .. tag, lines)
     player.game_view_settings.show_entity_info = true
 end
 

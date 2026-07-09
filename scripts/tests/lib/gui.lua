@@ -3,6 +3,10 @@
 --- single frame pinned to the top-left of the screen, kept in sync for every
 --- connected player. Harness owns when things resolve; this module only knows
 --- how to render whatever Harness/Bench hand it.
+---
+--- Layout mirrors RedMew's admin_panel/tasklist GUIs: a titlebar, then boxed
+--- `inside_shallow_frame` sections with `subheader_frame` headers (Instructions,
+--- Checks) rather than bare labels stacked in a column.
 
 local Gui = {}
 
@@ -19,12 +23,55 @@ local finished = nil
 --- @return string
 local function status_caption(status)
     if status == 'pending' then
-        return '[color=170,170,170]…[/color]'
+        return '[font=default-bold][color=170,170,170]…[/color][/font]'
     elseif status then
-        return '[color=0,220,0]PASS[/color]'
+        return '[font=default-bold][color=120,220,80]PASS[/color][/font]'
     else
-        return '[color=220,0,0]FAIL[/color]'
+        return '[font=default-bold][color=220,80,80]FAIL[/color][/font]'
     end
+end
+
+--- @param frame LuaGuiElement
+--- @param name string
+--- @param caption LocalisedString
+--- @return LuaGuiElement content frame of the new section
+--- @return LuaGuiElement header flow, holding the title label and (once added by the caller) any trailing widgets
+local function add_section(frame, name, caption)
+    local inner = frame.add({ type = 'frame', name = name, style = 'inside_shallow_frame', direction = 'vertical' })
+    local header = inner.add({ type = 'frame', name = 'lbf-header', style = 'subheader_frame' })
+    header.style.horizontally_stretchable = true
+    local header_flow = header.add({ type = 'flow', name = 'lbf-header-flow', direction = 'horizontal' })
+    header_flow.style.horizontally_stretchable = true
+    header_flow.add({ type = 'label', caption = caption, style = 'subheader_caption_label' })
+    return inner, header_flow
+end
+
+--- Adds a flexible, stretching spacer — mirrors utils.gui's `add_pusher`.
+--- @param element LuaGuiElement
+function Gui.add_pusher(element)
+    local pusher = element.add({ type = 'empty-widget' })
+    pusher.style.horizontally_stretchable = true
+    return pusher
+end
+
+--- Small bordered tile showing a big colored number over a caption — used for
+--- the live Pending/Passed/Failed counts instead of a single text line.
+--- @param parent LuaGuiElement
+--- @param name string
+--- @param color Color
+--- @param caption LocalisedString
+--- @return LuaGuiElement
+local function add_stat_tile(parent, name, color, caption)
+    local tile = parent.add({ type = 'frame', name = name, style = 'bordered_frame', direction = 'vertical' })
+    tile.style.padding = 4
+    tile.style.horizontally_stretchable = true
+    tile.style.horizontal_align = 'center'
+    local number = tile.add({ type = 'label', name = 'lbf-number', caption = '0' })
+    number.style.font = 'default-large-bold'
+    number.style.font_color = color
+    local label = tile.add({ type = 'label', name = 'lbf-label', caption = caption })
+    label.style.font_color = { 170, 170, 170 }
+    return tile
 end
 
 --- @param player LuaPlayer
@@ -36,55 +83,89 @@ local function ensure_frame(player)
     end
 
     local frame = player.gui.screen.add({ type = 'frame', name = FRAME_NAME, direction = 'vertical' })
+    frame.style.width = 420
     frame.location = { x = 8, y = 8 }
 
-    frame.add({ type = 'label', name = 'lbf-tag', style = 'frame_title' })
-    local lines_flow = frame.add({ type = 'flow', name = 'lbf-lines', direction = 'vertical' })
-    lines_flow.style.bottom_margin = 6
+    local titlebar = frame.add({ type = 'flow', name = 'lbf-titlebar', direction = 'horizontal' })
+    titlebar.drag_target = frame
+    titlebar.add({ type = 'label', name = 'lbf-tag', style = 'frame_title', ignored_by_interaction = true })
+    local drag = titlebar.add({ type = 'empty-widget', style = 'draggable_space_header', ignored_by_interaction = true })
+    drag.style.horizontally_stretchable = true
+    drag.style.height = 24
 
-    frame.add({ type = 'line' })
-    frame.add({ type = 'label', name = 'lbf-counter' })
+    local canvas = frame.add({ type = 'flow', name = 'lbf-canvas', direction = 'vertical' })
+    canvas.style.vertical_spacing = 6
 
-    local pane = frame.add({ type = 'scroll-pane', name = 'lbf-pane' })
-    pane.style.maximal_height = 420
+    local instructions = add_section(canvas, 'lbf-instructions', { 'lbf-gui.instructions-title' })
+    local lines_flow = instructions.add({ type = 'flow', name = 'lbf-lines', direction = 'vertical' })
+    lines_flow.style.padding = 8
+
+    local checks = add_section(canvas, 'lbf-checks', { 'lbf-gui.checks-title' })
+
+    local stats = checks.add({ type = 'flow', name = 'lbf-stats', direction = 'horizontal' })
+    stats.style.padding = 8
+    stats.style.horizontal_spacing = 6
+    add_stat_tile(stats, 'lbf-stat-pending', { 170, 170, 170 }, { 'lbf-gui.stat-pending' })
+    add_stat_tile(stats, 'lbf-stat-passed', { 120, 220, 80 }, { 'lbf-gui.stat-passed' })
+    add_stat_tile(stats, 'lbf-stat-failed', { 220, 80, 80 }, { 'lbf-gui.stat-failed' })
+
+    local pane = checks.add({ type = 'scroll-pane', name = 'lbf-pane' })
+    pane.style.maximal_height = 360
+    pane.style.padding = 8
+    pane.style.top_padding = 0
     local grid = pane.add({ type = 'table', name = 'lbf-rows', column_count = 2 })
     grid.style.horizontal_spacing = 12
+    grid.style.vertical_spacing = 4
 
-    frame.add({ type = 'label', name = 'lbf-final' })
+    local final = canvas.add({ type = 'frame', name = 'lbf-final-frame', style = 'neutral_message_frame', direction = 'vertical' })
+    final.style.horizontally_stretchable = true
+    final.style.horizontal_align = 'center'
+    final.style.padding = 8
+    final.visible = false
+    local final_title = final.add({ type = 'label', name = 'lbf-final-title' })
+    final_title.style.font = 'default-large-bold'
+    final.add({ type = 'label', name = 'lbf-final-counts' })
+
     return frame
 end
 
 --- @param frame LuaGuiElement
 local function rebuild(frame)
-    frame['lbf-tag'].caption = header and header.tag or ''
+    frame['lbf-titlebar']['lbf-tag'].caption = header and header.tag or { 'lbf-gui.default-title' }
 
-    local lines_flow = frame['lbf-lines']
+    local canvas = frame['lbf-canvas']
+    local instructions = canvas['lbf-instructions']
+    local lines_flow = instructions['lbf-lines']
     lines_flow.clear()
+    instructions.visible = header ~= nil and #header.lines > 0
     if header then
         for _, line in pairs(header.lines) do
             local label = lines_flow.add({ type = 'label', caption = line })
             label.style.single_line = false
-            label.style.maximal_width = 420
+            label.style.maximal_width = 380
         end
     end
 
+    local checks = canvas['lbf-checks']
     local total = #rows
-    local passed, resolved = 0, 0
+    local passed, failed_count = 0, 0
     for _, row in pairs(rows) do
         if row.status ~= 'pending' then
-            resolved = resolved + 1
             if row.status then
                 passed = passed + 1
+            else
+                failed_count = failed_count + 1
             end
         end
     end
-    local counter_color = (resolved < total) and '220,220,0' or (passed == total) and '0,220,0' or '220,0,0'
-    frame['lbf-counter'].caption = string.format(
-        '[color=%s]%d/%d resolved — %d passed, %d failed[/color]',
-        counter_color, resolved, total, passed, resolved - passed
-    )
+    local pending_count = total - passed - failed_count
 
-    local grid = frame['lbf-pane']['lbf-rows']
+    local stats = checks['lbf-stats']
+    stats['lbf-stat-pending']['lbf-number'].caption = tostring(pending_count)
+    stats['lbf-stat-passed']['lbf-number'].caption = tostring(passed)
+    stats['lbf-stat-failed']['lbf-number'].caption = tostring(failed_count)
+
+    local grid = checks['lbf-pane']['lbf-rows']
     grid.clear()
     for index, row in pairs(rows) do
         grid.add({ type = 'label', caption = index .. '. ' .. row.name })
@@ -94,12 +175,21 @@ local function rebuild(frame)
         end
     end
 
+    local final_frame = canvas['lbf-final-frame']
     if finished then
-        frame['lbf-final'].caption = finished.failed == 0
-            and '[color=0,220,0]All tests passed — scenario complete.[/color]'
-            or string.format('[color=220,0,0]%d test(s) failed — scenario complete.[/color]', finished.failed)
+        final_frame.visible = true
+        final_frame.style = finished.failed == 0 and 'positive_message_frame' or 'negative_message_frame'
+        final_frame.style.horizontally_stretchable = true
+        final_frame.style.horizontal_align = 'center'
+        final_frame.style.padding = 8
+        final_frame['lbf-final-title'].caption = finished.failed == 0
+            and { 'lbf-gui.final-title-passed' }
+            or { 'lbf-gui.final-title-failed' }
+        final_frame['lbf-final-counts'].caption = string.format(
+            '%d/%d checks passed', finished.passed, finished.passed + finished.failed
+        )
     else
-        frame['lbf-final'].caption = ''
+        final_frame.visible = false
     end
 end
 
@@ -134,17 +224,9 @@ function Gui.upsert(name, status, extra)
     Gui.refresh()
 end
 
---- @return { name: string, status: boolean|'pending', extra: string? }[] a shallow copy, in registration order
-function Gui.rows()
-    local copy = {}
-    for index, row in pairs(rows) do
-        copy[index] = row
-    end
-    return copy
-end
-
 --- Marks the suite as complete; the panel keeps showing the full table plus a
---- closing line, on top of whatever end-of-scenario screen Harness triggers.
+--- closing banner — this panel is the sole on-screen record of scenario
+--- completion (see Harness.summary_after).
 --- @param passed integer
 --- @param failed integer
 function Gui.finish(passed, failed)

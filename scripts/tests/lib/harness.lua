@@ -10,8 +10,8 @@
 ---   Harness.watch('reserve never violated', function() return player.get_main_inventory().get_item_count('coal') < 20 end, 3600)
 --- Results render live in the on-screen panel (scripts/tests/lib/gui.lua) as
 --- they resolve; call Harness.summary_after(ticks) once at the end of a
---- level's setup to finish the panel and end the scenario with a win/lose
---- screen once every check has settled.
+--- level's setup to finish the panel and print the final PASS/FAIL summary
+--- once every check has settled.
 
 local Gui = require('__lazy-bastards-friend__.scripts.tests.lib.gui')
 
@@ -88,8 +88,19 @@ function Harness.watch(name, violated, timeout_ticks)
     pending[#pending + 1] = { name = name, condition = violated, deadline = game.tick + timeout_ticks, watch = true }
 end
 
---- Finishes the results panel and ends the scenario with a win/lose screen
---- once every `eventually`/`watch` check registered so far has resolved.
+--- Finishes the results panel once every `eventually`/`watch` check registered
+--- so far has resolved. The panel (scripts/tests/lib/gui.lua) is the sole
+--- record of completion — its live Pending/Passed/Failed tiles and final
+--- banner (set by Gui.finish) — nothing is printed to chat and the game
+--- keeps running normally afterwards (no game_finished modal), so you can
+--- keep poking at the admin GUI to debug a failure without the view freezing.
+--- We used to also raise the Factorio-native win screen via
+--- game.set_win_ending_info for the all-passed case, mirroring base's
+--- silo-script.lua, but that modal's bullet-point list sits in a
+--- `deep_scroll_pane_with_padding` with `vertically_stretchable: off` baked
+--- into the base game style, so it never expands to fill the dialog and
+--- looks cramped with only a handful of checks — dropping it in favor of the
+--- panel above removes both the duplication and the layout we can't control.
 --- @param delay_ticks uint how long to wait before finishing, should exceed the
 ---   longest `eventually`/`watch` timeout registered in this level
 local summary_scheduled = false
@@ -113,46 +124,7 @@ function Harness.summary_after(delay_ticks)
             end
         end
         Gui.finish(passed, failed)
-        Harness.end_scenario(passed, failed)
     end)
-end
-
---- Ends the scenario with a Factorio-native win screen (all checks passed) or
---- just prints a chat summary (any failure), listing every test and its
---- result. Mirrors how base's silo-script.lua and the community "Better
---- Victory Screen" mod report level completion via game.set_win_ending_info +
---- game.set_game_state, instead of leaving the tally in chat scrollback.
---- On failure we deliberately skip the game_finished modal — `can_continue`
---- on a lose screen isn't reliably resumable client-side, and freezing the
---- view is the opposite of what you want while poking at the admin GUI to
---- see why a check failed. The on-screen panel (scripts/tests/lib/gui.lua)
---- already shows the FAIL marks live, and the game keeps running normally.
---- @param passed integer
---- @param failed integer
-function Harness.end_scenario(passed, failed)
-    local bullet_points = {}
-    for _, row in pairs(Gui.rows()) do
-        local mark = row.status == false and '[color=220,0,0]FAIL[/color]' or '[color=0,220,0]PASS[/color]'
-        bullet_points[#bullet_points + 1] = mark .. '  ' .. row.name .. (row.extra and (' — ' .. row.extra) or '')
-    end
-    local total = passed + failed
-    local summary = string.format('%d/%d checks passed.', passed, total)
-
-    if failed == 0 then
-        game.reset_game_state()
-        game.set_win_ending_info({
-            title = 'All tests passed',
-            message = summary,
-            bullet_points = bullet_points,
-            final_message = 'LBF test bench complete.',
-        })
-        game.set_game_state({ game_finished = true, player_won = true, can_continue = true })
-    else
-        game.print(string.format('[color=220,0,0]%d test(s) failed[/color] — %s', failed, summary))
-        for _, line in pairs(bullet_points) do
-            game.print(line)
-        end
-    end
 end
 
 return Harness
