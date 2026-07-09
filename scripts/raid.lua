@@ -5,9 +5,9 @@
 --- tallied into a per-cycle report that feeds the production-graph statistics item
 --- and the optional flying-text summary (§4.4, §10.5).
 
-local State = require('scripts.state')
-local Transfer = require('scripts.lib.transfer')
-local Distribution = require('scripts.lib.distribution')
+local State = require('__lazy-bastards-friend__.scripts.state')
+local Transfer = require('__lazy-bastards-friend__.scripts.lib.transfer')
+local Distribution = require('__lazy-bastards-friend__.scripts.lib.distribution')
 
 local Raid = {}
 

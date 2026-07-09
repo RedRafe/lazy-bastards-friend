@@ -4,7 +4,7 @@
 --- Conditional nth-tick like the scheduler:
 --- zero cost when disabled, tripped, or with nothing left to retire.
 
-local State = require('scripts.state')
+local State = require('__lazy-bastards-friend__.scripts.state')
 
 local Watchdog = {}
 

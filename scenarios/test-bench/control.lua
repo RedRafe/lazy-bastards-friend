@@ -1,1 +1,0 @@
-require '__lazy-bastards-friend__.scripts.tests.test-01'

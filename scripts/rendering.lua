@@ -2,7 +2,7 @@
 --- entity so the engine moves them for free — no per-tick Lua. Objects are destroyed
 --- and recreated on any state/appearance change; color-only changes mutate in place.
 
-local State = require('scripts.state')
+local State = require('__lazy-bastards-friend__.scripts.state')
 
 local Rendering = {}
 

@@ -1,15 +1,16 @@
 --- Wiring only: module requires, refresh-handler registration, event dispatch.
 --- All behavior lives in scripts/ (see DESIGN.md §11).
 
-local State = require('scripts.state')
-local Rendering = require('scripts.rendering')
-local RelativeGui = require('scripts.gui.relative')
-local AdminGui = require('scripts.gui.admin')
-local Shortcut = require('scripts.shortcut')
-local Scheduler = require('scripts.scheduler')
-local Watchdog = require('scripts.watchdog')
-local Raid = require('scripts.raid')
-require('scripts.remote')
+local State = require('__lazy-bastards-friend__.scripts.state')
+local Rendering = require('__lazy-bastards-friend__.scripts.rendering')
+local RelativeGui = require('__lazy-bastards-friend__.scripts.gui.relative')
+local AdminGui = require('__lazy-bastards-friend__.scripts.gui.admin')
+local Shortcut = require('__lazy-bastards-friend__.scripts.shortcut')
+local Scheduler = require('__lazy-bastards-friend__.scripts.scheduler')
+local Watchdog = require('__lazy-bastards-friend__.scripts.watchdog')
+local Raid = require('__lazy-bastards-friend__.scripts.raid')
+local Event = require('__lazy-bastards-friend__.scripts.lib.event')
+require('__lazy-bastards-friend__.scripts.remote')
 
 State.add_refresh_handler(Rendering.refresh)
 State.add_refresh_handler(RelativeGui.sync)
@@ -19,26 +20,7 @@ State.add_refresh_handler(Watchdog.refresh)
 State.add_refresh_handler(Scheduler.refresh)
 Watchdog.add_check_listener(AdminGui.refresh_all) -- live SPM readout while open
 
--- Tiny dispatcher so multiple modules can subscribe to the same event without
--- clobbering each other's script.on_event registration.
---- @type table<uint, fun(event)[]>
-local handlers = {}
-
---- @param event_id defines.events|string
---- @param handler fun(event)
-local function on(event_id, handler)
-    local list = handlers[event_id]
-    if not list then
-        list = {}
-        handlers[event_id] = list
-        script.on_event(event_id, function(event)
-            for _, fn in pairs(list) do
-                fn(event)
-            end
-        end)
-    end
-    list[#list + 1] = handler
-end
+local on = Event.add
 
 --- @param player LuaPlayer
 local function setup_player(player)
@@ -49,7 +31,7 @@ end
 
 -- == Lifecycle ==============================================================
 
-script.on_init(function()
+Event.on_init(function()
     State.init()
     Raid.rebuild_smelt_map()
     for _, player in pairs(game.players) do
@@ -58,7 +40,7 @@ script.on_init(function()
     Watchdog.rebuild()
 end)
 
-script.on_configuration_changed(function()
+Event.on_configuration_changed(function()
     State.init()
     Raid.rebuild_smelt_map()
     AdminGui.close_all() -- schemas may have changed; stale frames crash sync
@@ -71,7 +53,7 @@ end)
 
 -- on_load may only read storage: re-register the conditional nth-tick
 -- handlers exactly as the saved state implies.
-script.on_load(function()
+Event.on_load(function()
     Scheduler.apply()
     Watchdog.apply()
 end)

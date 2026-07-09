@@ -3,7 +3,7 @@
 --- reserved-items editor with logistic-group import.
 --- All interactions route through tags (element.tags.lbf_action), never element names.
 
-local State = require('scripts.state')
+local State = require('__lazy-bastards-friend__.scripts.state')
 
 local Gui = {}
 

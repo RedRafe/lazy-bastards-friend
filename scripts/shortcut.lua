@@ -2,7 +2,7 @@
 --- global masters together, admins only. For everyone else the shortcut state is a
 --- read-only indicator of whether any master is on.
 
-local State = require('scripts.state')
+local State = require('__lazy-bastards-friend__.scripts.state')
 
 local Shortcut = {}
 

@@ -4,8 +4,8 @@
 --- Every action is re-checked against player.admin server-side — a GUI can go
 --- stale between demotion and the close we do on on_player_demoted.
 
-local State = require('scripts.state')
-local Watchdog = require('scripts.watchdog')
+local State = require('__lazy-bastards-friend__.scripts.state')
+local Watchdog = require('__lazy-bastards-friend__.scripts.watchdog')
 
 local Admin = {}
 

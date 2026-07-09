@@ -3,8 +3,8 @@
 --- gets one cycle per period with the load spread evenly. No queue = no handler
 --- registered at all — the mod costs zero while nobody needs it.
 
-local State = require('scripts.state')
-local Raid = require('scripts.raid')
+local State = require('__lazy-bastards-friend__.scripts.state')
+local Raid = require('__lazy-bastards-friend__.scripts.raid')
 
 local Scheduler = {}
 

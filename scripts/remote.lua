@@ -2,8 +2,8 @@
 --- can do, other mods and scenarios can do through here. Documented with
 --- copy-paste examples in docs/API.md; keep the two in sync.
 
-local State = require('scripts.state')
-local Watchdog = require('scripts.watchdog')
+local State = require('__lazy-bastards-friend__.scripts.state')
+local Watchdog = require('__lazy-bastards-friend__.scripts.watchdog')
 
 --- @param channel any
 --- @return LbfChannel
