@@ -100,7 +100,7 @@ function Harness.summary_after(delay_ticks)
     summary_scheduled = true
     local tick = game.tick + delay_ticks
     script.on_nth_tick(60, function(event)
-        if event.tick < tick then
+        if #pending > 0 and event.tick < tick then
             return
         end
         script.on_nth_tick(60, nil)
