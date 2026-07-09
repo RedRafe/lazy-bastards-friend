@@ -5,10 +5,11 @@
 
 local State = require('__lazy-bastards-friend__.scripts.state')
 local Raid = require('__lazy-bastards-friend__.scripts.raid')
+local Event = require('__lazy-bastards-friend__.scripts.lib.event')
 
 local Scheduler = {}
 
---- Interval currently registered with script.on_nth_tick. Plain local (not
+--- Interval currently registered via Event.on_nth_tick. Plain local (not
 --- storage): it mirrors registration state, which is rebuilt from scratch on
 --- every load via Scheduler.apply.
 --- @type integer?
@@ -55,11 +56,11 @@ function Scheduler.apply()
         return
     end
     if registered_interval then
-        script.on_nth_tick(registered_interval, nil)
+        Event.remove_nth_tick(registered_interval, on_nth_tick_handler)
     end
     registered_interval = interval
     if interval then
-        script.on_nth_tick(interval, on_nth_tick_handler)
+        Event.on_nth_tick(interval, on_nth_tick_handler)
     end
 end
 

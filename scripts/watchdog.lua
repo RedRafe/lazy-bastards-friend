@@ -5,12 +5,14 @@
 --- zero cost when disabled, tripped, or with nothing left to retire.
 
 local State = require('__lazy-bastards-friend__.scripts.state')
+local Event = require('__lazy-bastards-friend__.scripts.lib.event')
 
 local Watchdog = {}
 
 -- 601, not a round 600: the scheduler's nth-tick interval can be any value up
--- to lbf-update-period's maximum (600), and registering two handlers on the
--- same nth-tick value would clobber one of them.
+-- to lbf-update-period's maximum (600). Registering through Event.on_nth_tick
+-- means a collision would fan out rather than clobber, but keeping this
+-- disjoint still avoids running the check mid-scheduler-sweep for no reason.
 local CHECK_INTERVAL = 601
 local STRIKES_TO_TRIP = 3 -- consecutive over-threshold checks before retiring
 
@@ -98,7 +100,11 @@ function Watchdog.apply()
         return
     end
     registered = armed
-    script.on_nth_tick(CHECK_INTERVAL, armed and check or nil)
+    if armed then
+        Event.on_nth_tick(CHECK_INTERVAL, check)
+    else
+        Event.remove_nth_tick(CHECK_INTERVAL, check)
+    end
 end
 
 --- Recompute whether the watchdog should run, persist it, re-register.
