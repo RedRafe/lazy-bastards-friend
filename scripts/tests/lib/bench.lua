@@ -5,6 +5,7 @@
 --- helpers below.
 
 local Event = require('__lazy-bastards-friend__.scripts.lib.event')
+local Gui = require('__lazy-bastards-friend__.scripts.tests.lib.gui')
 
 local Bench = {}
 
@@ -106,19 +107,17 @@ function Bench.research(force, names)
     end
 end
 
---- Prints a standard yellow-tagged intro line followed by plain instruction lines.
+--- Sets the level tag + instruction lines shown in the on-screen results
+--- panel (scripts/tests/lib/gui.lua).
 --- @param player LuaPlayer
 --- @param tag string short level tag, e.g. "L01 fuel feed"
 --- @param lines string[]
 function Bench.intro(player, tag, lines)
-    player.print('[color=yellow]LBF test bench — ' .. tag .. '[/color]')
-    for _, line in pairs(lines) do
-        player.print(line)
-    end
+    Gui.set_header('LBF test bench — ' .. tag, lines)
     player.game_view_settings.show_entity_info = true
 end
 
---- Standard on_player_created wiring: give the kit, print the intro, done once
+--- Standard on_player_created wiring: give the kit, show the intro, done once
 --- per player. Call this from a level's top level, e.g.:
 ---   Bench.on_player_created(KIT, 'L01 fuel feed', LINES)
 --- @param kit table<string, integer>

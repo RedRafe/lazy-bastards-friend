@@ -55,15 +55,11 @@ Event.add(defines.events.on_player_created, function(event)
     end, 3600)
 
     -- Long-lived guard: any tick where the reserve is violated is an immediate,
-    -- permanent failure, so this check fires as soon as it happens rather than
-    -- polling once at a fixed deadline. Uses a period (61) distinct from
-    -- Harness's own poller (30) — one mod can't hold two handlers on the same period.
-    script.on_nth_tick(61, function()
-        if player.get_main_inventory().get_item_count(RESERVE_ITEM) < RESERVE_AMOUNT then
-            game.print('[color=red][FAIL][/color] reserve was violated: coal dropped below ' .. RESERVE_AMOUNT)
-            script.on_nth_tick(61, nil)
-        end
-    end)
+    -- permanent failure, so this fails as soon as it happens rather than
+    -- polling once at a fixed deadline.
+    Harness.watch('reserve never dips below ' .. RESERVE_AMOUNT .. ' coal', function()
+        return player.get_main_inventory().get_item_count(RESERVE_ITEM) < RESERVE_AMOUNT
+    end, 3600)
 
     Harness.summary_after(3660)
 end)

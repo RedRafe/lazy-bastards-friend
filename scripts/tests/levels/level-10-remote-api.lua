@@ -1,9 +1,10 @@
 --- L10 — Remote interface smoke test (docs/API.md). Fully automated: no bench,
 --- no player interaction needed, just exercise every `lazy-bastards-friend`
---- remote call and print PASS/FAIL for each. Useful as a fast regression check
---- after touching scripts/remote.lua — run it and read the console.
+--- remote call and report PASS/FAIL for each in the results panel. Useful as
+--- a fast regression check after touching scripts/remote.lua.
 
 local Harness = require('__lazy-bastards-friend__.scripts.tests.lib.harness')
+local Gui = require('__lazy-bastards-friend__.scripts.tests.lib.gui')
 local Event = require('__lazy-bastards-friend__.scripts.lib.event')
 
 local INTERFACE = 'lazy-bastards-friend'
@@ -21,8 +22,9 @@ Event.add(defines.events.on_player_created, function(event)
     if not player then
         return
     end
-    player.print('[color=yellow]LBF test bench — L10 remote API smoke test[/color]')
-    player.print('Fully automated — results print below, no need to move.')
+    Gui.set_header('LBF test bench — L10 remote API smoke test', {
+        'Fully automated — results show in this panel, no need to move.',
+    })
 
     Harness.check('get_active accepts all three channels', function()
         return type(call('get_active', 'collect')) == 'boolean'
