@@ -21,8 +21,10 @@ local BEHAVIOR_FLAGS = { 'fuel', 'ingredients', 'chests', 'ground', 'trash', 're
 -- Per-player mod setting each behavior flag mirrors (State.push_setting, §8).
 local FLAG_SETTING = State.flag_setting
 
--- Logistic group whose minimum values the import button copies into reserves (§6).
-local IMPORT_GROUP = 'LBF'
+-- Logistic group prefix whose minimum values the import button copies into reserves (§6).
+-- Matched case-insensitively as "lbf::<player-name>"; a matching group is renamed to the
+-- canonical "LBF::<player-name>" (using the player's exact name) after a successful import.
+local IMPORT_GROUP_TAG = 'LBF'
 
 local COLOR_COMPONENTS = { 'r', 'g', 'b' }
 
@@ -181,7 +183,7 @@ function Gui.build(player)
         type = 'button',
         name = 'lbf-reserves-import',
         caption = { 'lbf-gui.reserves-import' },
-        tooltip = { 'lbf-gui.reserves-import-tooltip' },
+        tooltip = { 'lbf-gui.reserves-import-tooltip', IMPORT_GROUP_TAG .. '::' .. player.name },
         tags = { lbf_action = 'reserve-import' },
     })
 
@@ -349,17 +351,19 @@ function Gui.sync(player)
     sync_reserves(content['lbf-reserves'], data.reserves)
 end
 
---- Copy minimum values from the player's logistic group named `LBF` into their
---- reserves (§6 — import-on-click only, no live sync).
+--- Copy minimum values from the player's logistic group named `LBF::<player-name>`
+--- (case-insensitive) into their reserves (§6 — import-on-click only, no live sync).
 --- @param player LuaPlayer
 --- @param data LbfPlayerData
 local function import_reserves(player, data)
+    local canonical_name = IMPORT_GROUP_TAG .. '::' .. player.name
+    local match_name = canonical_name:lower()
     local character = player.character
     local sections = character and character.get_logistic_sections()
     local imported = 0
     if sections then
         for _, section in pairs(sections.sections) do
-            if section.group == IMPORT_GROUP then
+            if section.group:lower() == match_name then
                 for _, filter in pairs(section.filters) do
                     local value = filter.value
                     local name = value and (value.type == nil or value.type == 'item') and value.name
@@ -373,10 +377,10 @@ local function import_reserves(player, data)
         end
     end
     if imported > 0 then
-        player.print({ 'lbf-message.import-done', imported, IMPORT_GROUP })
+        player.print({ 'lbf-message.import-done', imported, canonical_name })
     else
         player.create_local_flying_text({
-            text = { 'lbf-message.import-none', IMPORT_GROUP },
+            text = { 'lbf-message.import-none', canonical_name },
             create_at_cursor = true,
         })
     end
