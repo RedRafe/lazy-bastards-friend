@@ -64,6 +64,16 @@ function State.init()
         end
         data.summary = data.summary or { collected = {}, fed = {}, next_flush = 0 }
         data.excluded = data.excluded or {}
+        if data.master == nil then
+            data.master = true
+        end
+        data.show_area = nil -- superseded by fill (fill=false now hides the area entirely)
+        data.ui = data.ui or State.default_ui()
+        for id, default in pairs(State.default_ui().sections) do
+            if data.ui.sections[id] == nil then
+                data.ui.sections[id] = default
+            end
+        end
         for name in pairs(data.reserves) do
             if not prototypes.item[name] then
                 data.reserves[name] = nil
@@ -73,13 +83,14 @@ function State.init()
 end
 
 --- @class LbfPlayerData
+--- @field master boolean per-player master switch: false turns the whole mod off for this player, preserving per-channel prefs
 --- @field enabled table<LbfChannel, boolean>
 --- @field locked table<LbfChannel, boolean>
 --- @field radius uint
 --- @field shape 'circle'|'square'
 --- @field use_player_color boolean
 --- @field color Color
---- @field fill boolean
+--- @field fill boolean false = the serviced area is not drawn at all
 --- @field opacity double
 --- @field flags table<string, boolean>
 --- @field reserves table<string, uint>
@@ -89,6 +100,26 @@ end
 --- @field idle uint
 --- @field gui_version uint
 --- @field summary {collected: table<string, integer>, fed: table<string, integer>, next_flush: uint}
+--- @field ui {open: boolean, sections: table<string, boolean>} relative-gui prefs: whether the panel is expanded from its button, and which collapsible sections are open
+
+--- Default relative-gui layout prefs for a brand new player: panel starts
+--- collapsed to its button; once opened, only Behavior is expanded (the common
+--- case — deciding what to feed/take), everything else starts collapsed to
+--- keep the panel small. 'feed'/'take' are the advanced-options expanders
+--- inside Behavior.
+--- @return {open: boolean, sections: table<string, boolean>}
+function State.default_ui()
+    return {
+        open = false,
+        sections = {
+            behavior = true,
+            feed = false,
+            take = false,
+            appearance = false,
+            reserves = false,
+        },
+    }
+end
 
 --- @param player_index uint
 --- @return LbfPlayerData
@@ -96,6 +127,7 @@ function State.get_player_data(player_index)
     local data = storage.players[player_index]
     if not data then
         data = {
+            master = true,
             enabled = { collect = true, feed = true, combat = true },
             locked = { collect = false, feed = false, combat = false },
             radius = 16,
@@ -121,6 +153,7 @@ function State.get_player_data(player_index)
             idle = 0,
             gui_version = 0,
             summary = { collected = {}, fed = {}, next_flush = 0 },
+            ui = State.default_ui(),
         }
         storage.players[player_index] = data
     end
@@ -132,6 +165,10 @@ end
 --- the mod from the in-game settings screen as well as the relative GUI.
 --- @type table<string, {get: fun(data: LbfPlayerData): any, set: fun(data: LbfPlayerData, value: any)}>
 local PLAYER_SETTINGS = {
+    ['lbf-enabled'] = {
+        get = function(data) return data.master end,
+        set = function(data, value) data.master = value end,
+    },
     ['lbf-radius'] = {
         get = function(data) return data.radius end,
         set = function(data, value) data.radius = State.clamp_radius(value) end,
@@ -262,7 +299,7 @@ end
 --- @return boolean
 function State.effective(player_index, channel)
     local data = State.get_player_data(player_index)
-    return storage.active[channel] and not data.locked[channel] and data.enabled[channel]
+    return storage.active[channel] and not data.locked[channel] and data.master and data.enabled[channel]
 end
 
 --- @param player_index uint
@@ -313,6 +350,20 @@ end
 --- @param value boolean
 function State.set_player_enabled(player, channel, value)
     State.get_player_data(player.index).enabled[channel] = value
+end
+
+--- Single write path for the per-player master switch (GUI switch and toolbar
+--- shortcut — kept in sync through this). In singleplayer, an admin switching
+--- on also re-arms the global masters, so the switch alone fully revives a
+--- retired/disabled mod; in multiplayer the masters are admin-panel-only.
+--- @param player LuaPlayer
+--- @param value boolean
+function State.set_player_master(player, value)
+    State.get_player_data(player.index).master = value
+    State.push_setting(player, 'lbf-enabled')
+    if value and player.admin and not game.is_multiplayer() then
+        State.set_all_masters(true)
+    end
 end
 
 --- Admin per-player, per-channel lock. Locked = the channel is off for that

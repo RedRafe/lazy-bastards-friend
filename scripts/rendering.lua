@@ -40,7 +40,9 @@ function Rendering.refresh(player)
     local data = State.get_player_data(player.index)
     destroy(data)
 
-    if not player.connected or not State.any_effective(player.index) then
+    -- fill=false hides the area entirely (edge included); opacity is kept for
+    -- when it's re-enabled.
+    if not player.connected or not data.fill or not State.any_effective(player.index) then
         return
     end
     local anchor = player.character
@@ -68,17 +70,15 @@ function Rendering.refresh(player)
             players = players,
             draw_on_ground = true,
         })
-        if data.fill then
-            data.render.fill = rendering.draw_rectangle({
-                color = resolve_color(player, data, data.opacity),
-                filled = true,
-                left_top = left_top,
-                right_bottom = right_bottom,
-                surface = surface,
-                players = players,
-                draw_on_ground = true,
-            })
-        end
+        data.render.fill = rendering.draw_rectangle({
+            color = resolve_color(player, data, data.opacity),
+            filled = true,
+            left_top = left_top,
+            right_bottom = right_bottom,
+            surface = surface,
+            players = players,
+            draw_on_ground = true,
+        })
     else
         data.render.edge = rendering.draw_circle({
             color = resolve_color(player, data, EDGE_ALPHA),
@@ -90,17 +90,15 @@ function Rendering.refresh(player)
             players = players,
             draw_on_ground = true,
         })
-        if data.fill then
-            data.render.fill = rendering.draw_circle({
-                color = resolve_color(player, data, data.opacity),
-                radius = radius,
-                filled = true,
-                target = anchor,
-                surface = surface,
-                players = players,
-                draw_on_ground = true,
-            })
-        end
+        data.render.fill = rendering.draw_circle({
+            color = resolve_color(player, data, data.opacity),
+            radius = radius,
+            filled = true,
+            target = anchor,
+            surface = surface,
+            players = players,
+            draw_on_ground = true,
+        })
     end
 end
 

@@ -59,6 +59,13 @@ data:extend({
     },
     -- Per-player runtime.
     {
+        type = 'bool-setting',
+        name = 'lbf-enabled',
+        setting_type = 'runtime-per-user',
+        default_value = true,
+        order = '0',
+    },
+    {
         type = 'int-setting',
         name = 'lbf-radius',
         setting_type = 'runtime-per-user',
