@@ -112,8 +112,7 @@ end
 
 --- @param player LuaPlayer
 --- @param data LbfPlayerData
---- @param anchor LuaEntity center of the service area — the character, or the
----   vehicle being driven (DESIGN.md §10.9)
+--- @param anchor LuaEntity center of the service area — the player's character
 --- @param include_chests boolean chest-take or trash-drain wants containers scanned
 --- @param include_ground boolean ground-item pickup wants item-entities scanned
 --- @return LuaEntity[]
@@ -280,14 +279,12 @@ end
 --- @field chests boolean
 
 --- This player's or another connected player's service-area anchor: the
---- vehicle being driven, or the character (DESIGN.md §10.9) — mirrors
---- Raid.service's own anchor choice so rival overlap is checked against
---- where the service area actually is, not always the character.
+--- character. Mirrors Raid.service's own anchor choice so rival overlap is
+--- checked against where the service area actually is.
 --- @param player LuaPlayer
 --- @return LuaEntity?
 local function service_anchor(player)
-    local vehicle = player.vehicle
-    return (vehicle and vehicle.valid and vehicle) or player.character
+    return player.character
 end
 
 --- Other players still due in this sweep whose service area may overlap ours:
@@ -1164,9 +1161,6 @@ function Raid.service(player, pending)
     if not player.valid or not player.connected then
         return
     end
-    -- Vehicle support (DESIGN.md §10.9): the service area follows the vehicle
-    -- while the player drives it; falls back to the character otherwise.
-    local vehicle = player.vehicle
     local anchor = service_anchor(player)
     if not anchor then
         return
@@ -1220,17 +1214,7 @@ function Raid.service(player, pending)
         local totals = inventory_totals(main)
         local reserves = data.reserves
         if feed_fuel then
-            -- Feed the ridden vehicle's own fuel slot too, without polluting
-            -- the cached entity list (only ever appended to a fresh copy).
-            local fuel_entities = entities
-            if vehicle and vehicle.valid and vehicle.get_fuel_inventory() then
-                fuel_entities = {}
-                for i = 1, #entities do
-                    fuel_entities[i] = entities[i]
-                end
-                fuel_entities[#fuel_entities + 1] = vehicle
-            end
-            feed_fuel_pass(fuel_entities, main, totals, reserves, report, starved, saturated)
+            feed_fuel_pass(entities, main, totals, reserves, report, starved, saturated)
         end
         if feed_ingredients then
             feed_ingredients_pass(player, entities, main, totals, reserves, report, starved, saturated)

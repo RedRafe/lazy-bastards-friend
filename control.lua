@@ -108,8 +108,8 @@ on(defines.events.on_player_promoted, function(event)
     end
 end)
 
--- Renders live on a fixed surface and/or target the character/vehicle entity,
--- so any surface/character/vehicle change requires a destroy+redraw.
+-- Renders live on a fixed surface and/or target the character entity,
+-- so any surface/character change requires a destroy+redraw.
 for _, event_id in pairs({
     defines.events.on_player_changed_surface,
     defines.events.on_player_respawned,
@@ -123,17 +123,6 @@ for _, event_id in pairs({
         end
     end)
 end
-
--- Vehicle support (DESIGN.md §10.9): the service area follows the vehicle
--- while driving. Force an immediate rescan (stale cache would still center on
--- the old anchor) alongside the AoE redraw.
-on(defines.events.on_player_driving_changed_state, function(event)
-    local player = game.get_player(event.player_index)
-    if player then
-        State.get_player_data(player.index).cache = nil
-        State.refresh(player)
-    end
-end)
 
 -- Per-entity exclusion cleanup (DESIGN.md §10.4): once an excluded entity is
 -- gone, drop it from every player's table — `useful_id` is already the

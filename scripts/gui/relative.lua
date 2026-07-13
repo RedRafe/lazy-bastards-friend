@@ -4,7 +4,9 @@
 --- All interactions route through tags (element.tags.lbf_action), never element names.
 
 local State = require('__lazy-bastards-friend__.scripts.state')
-local set_style = require('__lazy-bastards-friend__.scripts.lib.style')
+local GuiUtil = require('__lazy-bastards-friend__.scripts.lib.gui')
+
+local set_style = GuiUtil.set_style
 
 local Gui = {}
 
@@ -47,12 +49,7 @@ function Gui.build(player)
             position = defines.relative_gui_position.right,
         },
     })
-    local content = frame.add({
-        type = 'frame',
-        name = 'content',
-        style = 'inside_shallow_frame_with_padding',
-        direction = 'vertical',
-    })
+    local content = GuiUtil.add_content_frame(frame)
 
     for _, channel in pairs(State.channels) do
         content.add({
@@ -165,7 +162,7 @@ function Gui.build(player)
         tooltip = { 'lbf-gui.reserves-tooltip' },
         style = 'caption_label',
     })
-    set_style(reserves_header.add({ type = 'empty-widget', name = 'spacer' }), { horizontally_stretchable = true })
+    GuiUtil.add_pusher(reserves_header)
     reserves_header.add({
         type = 'button',
         name = 'lbf-reserves-import',

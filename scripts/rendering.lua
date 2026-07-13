@@ -32,9 +32,9 @@ local function resolve_color(player, data, alpha)
 end
 
 --- Destroy and (if any channel is effective and an anchor exists) redraw the
---- AoE. Registered as a State refresh handler. The anchor is the vehicle
---- being driven, or the character (DESIGN.md §10.9) — targeting either makes
---- the engine move the render every tick for free, no per-tick Lua.
+--- AoE. Registered as a State refresh handler. The anchor is the character —
+--- targeting it makes the engine move the render every tick for free, no
+--- per-tick Lua.
 --- @param player LuaPlayer
 function Rendering.refresh(player)
     local data = State.get_player_data(player.index)
@@ -43,8 +43,7 @@ function Rendering.refresh(player)
     if not player.connected or not State.any_effective(player.index) then
         return
     end
-    local vehicle = player.vehicle
-    local anchor = (vehicle and vehicle.valid and vehicle) or player.character
+    local anchor = player.character
     if not anchor then
         return
     end

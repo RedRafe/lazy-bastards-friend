@@ -6,7 +6,9 @@
 
 local State = require('__lazy-bastards-friend__.scripts.state')
 local Watchdog = require('__lazy-bastards-friend__.scripts.watchdog')
-local set_style = require('__lazy-bastards-friend__.scripts.lib.style')
+local GuiUtil = require('__lazy-bastards-friend__.scripts.lib.gui')
+
+local set_style = GuiUtil.set_style
 
 local Admin = {}
 
@@ -123,31 +125,12 @@ function Admin.open(player)
 
     local frame = player.gui.screen.add({ type = 'frame', name = FRAME_NAME, direction = 'vertical' })
 
-    local titlebar = frame.add({ type = 'flow', name = 'titlebar', direction = 'horizontal' })
-    titlebar.drag_target = frame
-    titlebar.add({
-        type = 'label',
+    GuiUtil.add_titlebar(frame, {
         caption = { 'lbf-gui.admin-title' },
-        style = 'frame_title',
-        ignored_by_interaction = true,
-    })
-    set_style(titlebar.add({ type = 'empty-widget', style = 'draggable_space_header', ignored_by_interaction = true }), {
-        horizontally_stretchable = true,
-        height = 24,
-    })
-    titlebar.add({
-        type = 'sprite-button',
-        style = 'frame_action_button',
-        sprite = 'utility/close',
-        tags = { lbf_admin_action = 'close' },
+        close_tags = { lbf_admin_action = 'close' },
     })
 
-    local content = frame.add({
-        type = 'frame',
-        name = 'content',
-        style = 'inside_shallow_frame_with_padding',
-        direction = 'vertical',
-    })
+    local content = GuiUtil.add_content_frame(frame)
 
     local masters = set_style(content.add({ type = 'flow', name = 'lbf-masters', direction = 'horizontal' }), { horizontal_spacing = 12 })
     for _, channel in pairs(State.channels) do

@@ -8,7 +8,9 @@
 --- `inside_shallow_frame` sections with `subheader_frame` headers (Instructions,
 --- Checks) rather than bare labels stacked in a column.
 
-local set_style = require('__lazy-bastards-friend__.scripts.lib.style')
+local GuiUtil = require('__lazy-bastards-friend__.scripts.lib.gui')
+
+local set_style = GuiUtil.set_style
 
 local Gui = {}
 
@@ -46,12 +48,6 @@ local function add_section(frame, name, caption)
     return inner, header_flow
 end
 
---- Adds a flexible, stretching spacer — mirrors utils.gui's `add_pusher`.
---- @param element LuaGuiElement
-function Gui.add_pusher(element)
-    return set_style(element.add({ type = 'empty-widget' }), { horizontally_stretchable = true })
-end
-
 --- Small bordered tile showing a big colored number over a caption — used for
 --- the live Pending/Passed/Failed counts instead of a single text line.
 --- @param parent LuaGuiElement
@@ -81,13 +77,7 @@ local function ensure_frame(player)
     local frame = set_style(player.gui.screen.add({ type = 'frame', name = FRAME_NAME, direction = 'vertical' }), { width = 420 })
     frame.location = { x = 8, y = 8 }
 
-    local titlebar = frame.add({ type = 'flow', name = 'lbf-titlebar', direction = 'horizontal' })
-    titlebar.drag_target = frame
-    titlebar.add({ type = 'label', name = 'lbf-tag', style = 'frame_title', ignored_by_interaction = true })
-    set_style(titlebar.add({ type = 'empty-widget', style = 'draggable_space_header', ignored_by_interaction = true }), {
-        horizontally_stretchable = true,
-        height = 24,
-    })
+    GuiUtil.add_titlebar(frame, { name = 'lbf-titlebar', label_name = 'lbf-tag' })
 
     local canvas = set_style(frame.add({ type = 'flow', name = 'lbf-canvas', direction = 'vertical' }), { vertical_spacing = 6 })
 
