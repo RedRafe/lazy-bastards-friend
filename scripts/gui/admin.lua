@@ -6,6 +6,7 @@
 
 local State = require('__lazy-bastards-friend__.scripts.state')
 local Watchdog = require('__lazy-bastards-friend__.scripts.watchdog')
+local set_style = require('__lazy-bastards-friend__.scripts.lib.style')
 
 local Admin = {}
 
@@ -49,8 +50,7 @@ local function rebuild_rows(frame)
     for _, target in pairs(list) do
         local data = State.get_player_data(target.index)
         local dot = target.connected and '[color=0,0.8,0]●[/color] ' or '[color=0.5,0.5,0.5]○[/color] '
-        local name = grid.add({ type = 'label', caption = dot .. target.name })
-        name.style.font_color = target.chat_color
+        set_style(grid.add({ type = 'label', caption = dot .. target.name }), { font_color = target.chat_color })
         for _, channel in pairs(State.channels) do
             --- @type LocalisedString
             local tooltip = { 'lbf-gui.lock-tooltip', target.name }
@@ -131,9 +131,10 @@ function Admin.open(player)
         style = 'frame_title',
         ignored_by_interaction = true,
     })
-    local drag = titlebar.add({ type = 'empty-widget', style = 'draggable_space_header', ignored_by_interaction = true })
-    drag.style.horizontally_stretchable = true
-    drag.style.height = 24
+    set_style(titlebar.add({ type = 'empty-widget', style = 'draggable_space_header', ignored_by_interaction = true }), {
+        horizontally_stretchable = true,
+        height = 24,
+    })
     titlebar.add({
         type = 'sprite-button',
         style = 'frame_action_button',
@@ -148,8 +149,7 @@ function Admin.open(player)
         direction = 'vertical',
     })
 
-    local masters = content.add({ type = 'flow', name = 'lbf-masters', direction = 'horizontal' })
-    masters.style.horizontal_spacing = 12
+    local masters = set_style(content.add({ type = 'flow', name = 'lbf-masters', direction = 'horizontal' }), { horizontal_spacing = 12 })
     for _, channel in pairs(State.channels) do
         masters.add({
             type = 'checkbox',
@@ -174,13 +174,10 @@ function Admin.open(player)
         tags = { lbf_admin_action = 'scope' },
     })
 
-    local pane = content.add({ type = 'scroll-pane', name = 'lbf-players' })
-    pane.style.maximal_height = 320
-    local grid = pane.add({ type = 'table', name = 'lbf-table', column_count = 1 + #State.channels })
-    grid.style.horizontal_spacing = 16
+    local pane = set_style(content.add({ type = 'scroll-pane', name = 'lbf-players' }), { maximal_height = 320 })
+    set_style(pane.add({ type = 'table', name = 'lbf-table', column_count = 1 + #State.channels }), { horizontal_spacing = 16 })
 
-    local bulk = content.add({ type = 'flow', name = 'lbf-bulk', direction = 'horizontal' })
-    bulk.style.vertical_align = 'center'
+    local bulk = set_style(content.add({ type = 'flow', name = 'lbf-bulk', direction = 'horizontal' }), { vertical_align = 'center' })
     bulk.add({
         type = 'drop-down',
         name = 'lbf-bulk-channel',

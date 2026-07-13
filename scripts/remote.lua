@@ -39,6 +39,8 @@ local FLAG_NAMES = {
     trash = true,
     summary = true,
     show_others = true,
+    rebalance = true,
+    starvation = true,
 }
 
 --- @param flag any
@@ -184,5 +186,31 @@ remote.add_interface('lazy-bastards-friend', {
             error('lazy-bastards-friend: count must be nil or a non-negative number')
         end
         State.get_player_data(player.index).reserves[item_name] = count and math.floor(count) or nil
+    end,
+
+    --- Exclude/include one entity from this player's raids (DESIGN.md §10.4),
+    --- as if hovering it and pressing the exclude hotkey. Unlike the hotkey
+    --- path this takes a bare unit_number (no LuaEntity handle), so it cannot
+    --- register cleanup on the entity's destruction — callers that exclude an
+    --- entity through this call are responsible for clearing it again if the
+    --- entity might outlive their own bookkeeping.
+    --- @param player_index uint
+    --- @param unit_number uint
+    --- @param excluded boolean
+    set_entity_excluded = function(player_index, unit_number, excluded)
+        local player = check_player(player_index)
+        if type(unit_number) ~= 'number' then
+            error('lazy-bastards-friend: unit_number must be a number')
+        end
+        State.get_player_data(player.index).excluded[unit_number] = excluded == true or nil
+        State.get_player_data(player.index).cache = nil
+    end,
+
+    --- @param player_index uint
+    --- @param unit_number uint
+    --- @return boolean
+    is_entity_excluded = function(player_index, unit_number)
+        local player = check_player(player_index)
+        return State.get_player_data(player.index).excluded[unit_number] == true
     end,
 })

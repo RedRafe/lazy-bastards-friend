@@ -8,6 +8,7 @@
 local State = require('__lazy-bastards-friend__.scripts.state')
 local Transfer = require('__lazy-bastards-friend__.scripts.lib.transfer')
 local Distribution = require('__lazy-bastards-friend__.scripts.lib.distribution')
+local Rendering = require('__lazy-bastards-friend__.scripts.rendering')
 
 local Raid = {}
 
@@ -53,6 +54,24 @@ local IS_CHEST = { ['container'] = true, ['logistic-container'] = true }
 -- Crafter types the ingredient pass fills through defines.inventory.crafter_input.
 local INGREDIENT_TYPES = { ['furnace'] = true, ['assembling-machine'] = true, ['rocket-silo'] = true }
 
+-- Lookup set of every type a raid could ever touch (SCAN_TYPES + CHEST_TYPES),
+-- for the exclusion-toggle hotkey (DESIGN.md §10.4) to validate what's hovered.
+local TARGETABLE_TYPE = {}
+for _, t in pairs(SCAN_TYPES) do
+    TARGETABLE_TYPE[t] = true
+end
+for _, t in pairs(CHEST_TYPES) do
+    TARGETABLE_TYPE[t] = true
+end
+
+--- Whether `entity` is a type any raid pass could act on — used by the
+--- exclusion-toggle custom-input to validate the hovered entity.
+--- @param entity LuaEntity?
+--- @return boolean
+function Raid.is_targetable(entity)
+    return entity ~= nil and entity.valid and TARGETABLE_TYPE[entity.type] == true
+end
+
 --- Per-cycle transfer tally: item name -> count, split by direction.
 --- @class LbfReport
 --- @field collected table<string, integer> machines/ground -> player
@@ -93,13 +112,14 @@ end
 
 --- @param player LuaPlayer
 --- @param data LbfPlayerData
+--- @param anchor LuaEntity center of the service area — the character, or the
+---   vehicle being driven (DESIGN.md §10.9)
 --- @param include_chests boolean chest-take or trash-drain wants containers scanned
 --- @param include_ground boolean ground-item pickup wants item-entities scanned
 --- @return LuaEntity[]
-local function get_entities(player, data, include_chests, include_ground)
-    local character = player.character
-    local position = character.position
-    local surface = character.surface
+local function get_entities(player, data, anchor, include_chests, include_ground)
+    local position = anchor.position
+    local surface = anchor.surface
     local radius = State.get_radius(player.index)
     local period = settings.global['lbf-update-period'].value --[[@as integer]]
 
@@ -137,14 +157,25 @@ local function get_entities(player, data, include_chests, include_ground)
         filter.position = position
         filter.radius = radius
     end
-    local entities = surface.find_entities_filtered(filter)
+    local found = surface.find_entities_filtered(filter)
 
     if include_ground then
         -- Item-entities are force-neutral, so they need their own unfiltered query.
         --- @type EntitySearchFilters
         local ground_filter = { type = 'item-entity', area = filter.area, position = filter.position, radius = filter.radius }
         for _, entity in pairs(surface.find_entities_filtered(ground_filter)) do
-            entities[#entities + 1] = entity
+            found[#found + 1] = entity
+        end
+    end
+
+    local excluded = data.excluded
+    local entities = found
+    if next(excluded) ~= nil then
+        entities = {}
+        for _, entity in pairs(found) do
+            if not excluded[entity.unit_number] then
+                entities[#entities + 1] = entity
+            end
         end
     end
 
@@ -248,6 +279,17 @@ end
 --- @field square boolean
 --- @field chests boolean
 
+--- This player's or another connected player's service-area anchor: the
+--- vehicle being driven, or the character (DESIGN.md §10.9) — mirrors
+--- Raid.service's own anchor choice so rival overlap is checked against
+--- where the service area actually is, not always the character.
+--- @param player LuaPlayer
+--- @return LuaEntity?
+local function service_anchor(player)
+    local vehicle = player.vehicle
+    return (vehicle and vehicle.valid and vehicle) or player.character
+end
+
 --- Other players still due in this sweep whose service area may overlap ours:
 --- shared collect sources get split with them instead of taken whole (§1.4).
 --- Players already serviced this sweep took their share when it was their turn.
@@ -259,18 +301,18 @@ local function get_rivals(player, pending)
     if not pending then
         return nil
     end
-    local character = player.character
-    local surface_index = character.surface.index
-    local px, py = character.position.x, character.position.y
+    local anchor = service_anchor(player)
+    local surface_index = anchor.surface.index
+    local px, py = anchor.position.x, anchor.position.y
     local radius = State.get_radius(player.index)
     local rivals
     for _, index in pairs(pending) do
         if index ~= player.index and State.effective(index, 'collect') then
             local other = game.get_player(index)
-            local other_character = other and other.connected and other.character
-            if other_character and other_character.surface.index == surface_index then
+            local other_anchor = other and other.connected and service_anchor(other)
+            if other_anchor and other_anchor.surface.index == surface_index then
                 local other_radius = State.get_radius(index)
-                local ox, oy = other_character.position.x, other_character.position.y
+                local ox, oy = other_anchor.position.x, other_anchor.position.y
                 if math.abs(ox - px) <= radius + other_radius and math.abs(oy - py) <= radius + other_radius then
                     local other_data = State.get_player_data(index)
                     rivals = rivals or {}
@@ -427,20 +469,30 @@ local function get_player_fuels(totals, reserves)
 end
 
 --- Fuel to feed this entity: top up whatever is already loaded, else the
---- best carried fuel its burner accepts.
+--- best carried fuel its burner accepts. Records starved/saturated entities
+--- for the optional starvation feedback (DESIGN.md §10.10) when the caller
+--- passes those lists (nil when the flag is off — no extra cost).
 --- @param entity LuaEntity
 --- @param fuel_inventory LuaInventory
 --- @param fuels LbfFuelCandidate[]
 --- @param totals table<string, integer>
 --- @param reserves table<string, integer>
+--- @param starved LuaEntity[]?
+--- @param saturated LuaEntity[]?
 --- @return string?
-local function pick_fuel(entity, fuel_inventory, fuels, totals, reserves)
+local function pick_fuel(entity, fuel_inventory, fuels, totals, reserves, starved, saturated)
     local current = first_item_name(fuel_inventory)
     if current then
+        if available(totals, reserves, current) > 0 then
+            if saturated and Transfer.count_by_name(fuel_inventory, current) >= prototypes.item[current].stack_size then
+                saturated[#saturated + 1] = entity
+            end
+            return current
+        end
         -- Fuel slots are usually single; mixing in a second fuel type can't
         -- work anyway, so if the player can't spare this one, skip the entity.
-        if available(totals, reserves, current) > 0 then
-            return current
+        if starved then
+            starved[#starved + 1] = entity
         end
         return nil
     end
@@ -454,6 +506,9 @@ local function pick_fuel(entity, fuel_inventory, fuels, totals, reserves)
             return fuel.name
         end
     end
+    if starved then
+        starved[#starved + 1] = entity
+    end
     return nil
 end
 
@@ -462,7 +517,9 @@ end
 --- @param totals table<string, integer>
 --- @param reserves table<string, integer>
 --- @param report LbfReport
-local function feed_fuel_pass(entities, main, totals, reserves, report)
+--- @param starved LuaEntity[]? populated when the starvation flag is on
+--- @param saturated LuaEntity[]? populated when the starvation flag is on
+local function feed_fuel_pass(entities, main, totals, reserves, report, starved, saturated)
     local fuels = get_player_fuels(totals, reserves)
     --- @type table<string, LbfFeedGroup>
     local groups = {}
@@ -470,7 +527,7 @@ local function feed_fuel_pass(entities, main, totals, reserves, report)
         if entity.valid then
             local fuel_inventory = entity.get_fuel_inventory()
             if fuel_inventory then
-                local name = pick_fuel(entity, fuel_inventory, fuels, totals, reserves)
+                local name = pick_fuel(entity, fuel_inventory, fuels, totals, reserves, starved, saturated)
                 if name then
                     add_to_group(groups, name, fuel_inventory)
                 end
@@ -580,16 +637,24 @@ end
 --- @param totals table<string, integer>
 --- @param reserves table<string, integer>
 --- @param report LbfReport
-local function feed_ingredients_pass(player, entities, main, totals, reserves, report)
+--- @param starved LuaEntity[]? populated when the starvation flag is on
+--- @param saturated LuaEntity[]? populated when the starvation flag is on
+local function feed_ingredients_pass(player, entities, main, totals, reserves, report, starved, saturated)
     local research = player.force.current_research
     local research_ingredients = research and research.research_unit_ingredients
     local research_energy = research and research.research_unit_energy
     local lab_accepts = {} -- lab prototype name -> { pack name -> true }
+    local track = starved ~= nil or saturated ~= nil
     --- @type table<string, LbfFeedGroup>
     local groups = {}
     for _, entity in pairs(entities) do
         if entity.valid then
             local entity_type = entity.type
+            -- Per-entity starvation bookkeeping: any unspareable ingredient
+            -- marks it starved; if every checked ingredient is already at its
+            -- cap, it's saturated. Skipped entirely (both lists nil) when the
+            -- starvation flag is off.
+            local wants_any, is_starved, is_saturated = false, false, true
             if INGREDIENT_TYPES[entity_type] then
                 local input = entity.get_inventory(defines.inventory.crafter_input)
                 if input then
@@ -597,8 +662,17 @@ local function feed_ingredients_pass(player, entities, main, totals, reserves, r
                     if ingredients then
                         local crafts = crafts_in_window(entity, energy)
                         for _, ingredient in pairs(ingredients) do
-                            if ingredient.type == 'item' and available(totals, reserves, ingredient.name) > 0 then
-                                add_to_group(groups, ingredient.name, input, math.ceil(ingredient.amount * crafts))
+                            if ingredient.type == 'item' then
+                                wants_any = true
+                                local cap = math.ceil(ingredient.amount * crafts)
+                                if available(totals, reserves, ingredient.name) > 0 then
+                                    add_to_group(groups, ingredient.name, input, cap)
+                                    if track and Transfer.count_by_name(input, ingredient.name) < cap then
+                                        is_saturated = false
+                                    end
+                                else
+                                    is_starved = true
+                                end
                             end
                         end
                     elseif entity_type == 'furnace' then
@@ -610,14 +684,20 @@ local function feed_ingredients_pass(player, entities, main, totals, reserves, r
                         if name then
                             entry = smelt_entry(proto, name)
                             if available(totals, reserves, name) <= 0 then
+                                wants_any, is_starved = true, true
                                 name = nil
                             end
                         else
                             name, entry = pick_smelt_input(proto, totals, reserves)
                         end
                         if name and entry then
+                            wants_any = true
                             local crafts = crafts_in_window(entity, entry.energy)
-                            add_to_group(groups, name, input, math.ceil(entry.amount * crafts))
+                            local cap = math.ceil(entry.amount * crafts)
+                            add_to_group(groups, name, input, cap)
+                            if track and Transfer.count_by_name(input, name) < cap then
+                                is_saturated = false
+                            end
                         end
                     end
                 end
@@ -636,10 +716,28 @@ local function feed_ingredients_pass(player, entities, main, totals, reserves, r
                     end
                     local crafts = crafts_in_window(entity, research_energy)
                     for _, ingredient in pairs(research_ingredients) do
-                        if accepts[ingredient.name] and available(totals, reserves, ingredient.name) > 0 then
-                            add_to_group(groups, ingredient.name, input, math.ceil(ingredient.amount * crafts))
+                        if accepts[ingredient.name] then
+                            wants_any = true
+                            local cap = math.ceil(ingredient.amount * crafts)
+                            if available(totals, reserves, ingredient.name) > 0 then
+                                add_to_group(groups, ingredient.name, input, cap)
+                                if track and Transfer.count_by_name(input, ingredient.name) < cap then
+                                    is_saturated = false
+                                end
+                            else
+                                is_starved = true
+                            end
                         end
                     end
+                end
+            end
+            if track and wants_any then
+                if is_starved then
+                    if starved then
+                        starved[#starved + 1] = entity
+                    end
+                elseif is_saturated and saturated then
+                    saturated[#saturated + 1] = entity
                 end
             end
         end
@@ -745,6 +843,141 @@ local function feed_ammo_pass(entities, main, totals, reserves, report)
         end
     end
     distribute_groups(groups, main, totals, reserves, report)
+end
+
+-- == Pass 6: rebalance (DESIGN.md §1.1 pass 6, §12) =========================
+--
+-- Machine-to-machine only — never touches the player's inventory or reserves,
+-- so it works even when the player carries nothing. Scoped by **item name**
+-- rather than "identical machines" (DESIGN.md's original wording): simpler,
+-- and it lets e.g. a coal-hoarding stone furnace feed a coal-starved steel
+-- furnace. The ingredient side only considers inventories that *already* hold
+-- the item (no empty-acceptance inference — that would duplicate all of
+-- feed_ingredients_pass's recipe/smelt-map logic for marginal benefit). Both
+-- sides use a flat stack-size cap rather than each pass's finer per-entity
+-- cap (FEED_SECONDS, artillery automated_ammo_count, ...) — rebalance only
+-- needs a coarse "don't overfill" ceiling, not an exact one.
+
+--- Fuel-item groups: every fuel inventory already holding a given item, plus
+--- every empty one whose burner accepts that item's fuel category.
+--- @param entities LuaEntity[]
+--- @return table<string, LbfFeedGroup>
+local function rebalance_fuel_groups(entities)
+    local present, infos = {}, {}
+    for _, entity in pairs(entities) do
+        if entity.valid then
+            local fuel_inventory = entity.get_fuel_inventory()
+            if fuel_inventory then
+                local name = first_item_name(fuel_inventory)
+                infos[#infos + 1] = { entity = entity, inventory = fuel_inventory, name = name }
+                if name then
+                    present[name] = true
+                end
+            end
+        end
+    end
+    --- @type table<string, LbfFeedGroup>
+    local groups = {}
+    for name in pairs(present) do
+        local cap = prototypes.item[name].stack_size
+        local category = prototypes.item[name].fuel_category
+        for _, info in pairs(infos) do
+            if info.name == name then
+                add_to_group(groups, name, info.inventory, cap)
+            elseif not info.name and category then
+                local burner = info.entity.prototype.burner_prototype
+                if burner and burner.fuel_categories[category] then
+                    add_to_group(groups, name, info.inventory, cap)
+                end
+            end
+        end
+    end
+    return groups
+end
+
+--- Ingredient-item groups: every crafter/lab input inventory already holding
+--- a given item.
+--- @param entities LuaEntity[]
+--- @return table<string, LbfFeedGroup>
+local function rebalance_ingredient_groups(entities)
+    local present, inventories = {}, {}
+    for _, entity in pairs(entities) do
+        if entity.valid then
+            local entity_type = entity.type
+            local input
+            if INGREDIENT_TYPES[entity_type] then
+                input = entity.get_inventory(defines.inventory.crafter_input)
+            elseif entity_type == 'lab' then
+                input = entity.get_inventory(defines.inventory.lab_input)
+            end
+            if input then
+                inventories[#inventories + 1] = input
+                for i = 1, #input do
+                    local stack = input[i]
+                    if stack.valid_for_read then
+                        present[stack.name] = true
+                    end
+                end
+            end
+        end
+    end
+    --- @type table<string, LbfFeedGroup>
+    local groups = {}
+    for name in pairs(present) do
+        local cap = prototypes.item[name].stack_size
+        for _, inventory in pairs(inventories) do
+            if Transfer.count_by_name(inventory, name) > 0 then
+                add_to_group(groups, name, inventory, cap)
+            end
+        end
+    end
+    return groups
+end
+
+--- Execute one group's rebalance: compute the shared water level, then pair
+--- off donors (holders above it) and receivers (holders below it) with
+--- direct inventory-to-inventory transfers — no player inventory involved.
+--- @param group LbfFeedGroup
+local function rebalance_group(group)
+    if #group.inventories < 2 then
+        return
+    end
+    local name = group.name
+    local cap = group.cap or prototypes.item[name].stack_size
+    local gives, takes = Distribution.rebalance(group.counts, cap)
+    local donors = {}
+    for i, take in ipairs(takes) do
+        if take > 0 then
+            donors[#donors + 1] = { inventory = group.inventories[i], remaining = take }
+        end
+    end
+    local di = 1
+    for i, give in ipairs(gives) do
+        local need = give
+        while need > 0 and di <= #donors do
+            local donor = donors[di]
+            local moved = Transfer.give(donor.inventory, group.inventories[i], name, math.min(need, donor.remaining))
+            if moved == 0 then
+                di = di + 1
+            else
+                donor.remaining = donor.remaining - moved
+                need = need - moved
+                if donor.remaining <= 0 then
+                    di = di + 1
+                end
+            end
+        end
+    end
+end
+
+--- @param entities LuaEntity[]
+local function rebalance_pass(entities)
+    for _, group in pairs(rebalance_fuel_groups(entities)) do
+        rebalance_group(group)
+    end
+    for _, group in pairs(rebalance_ingredient_groups(entities)) do
+        rebalance_group(group)
+    end
 end
 
 -- == Trash-slot drain (DESIGN.md §10.3) =====================================
@@ -931,8 +1164,11 @@ function Raid.service(player, pending)
     if not player.valid or not player.connected then
         return
     end
-    local character = player.character
-    if not character then
+    -- Vehicle support (DESIGN.md §10.9): the service area follows the vehicle
+    -- while the player drives it; falls back to the character otherwise.
+    local vehicle = player.vehicle
+    local anchor = service_anchor(player)
+    if not anchor then
         return
     end
     local data = State.get_player_data(player.index)
@@ -957,40 +1193,62 @@ function Raid.service(player, pending)
     local combat = State.effective(player.index, 'combat')
     local feed_fuel = feed and flags.fuel
     local feed_ingredients = feed and flags.ingredients
+    local rebalance = feed and flags.rebalance
+    local starvation = feed and flags.starvation
     local take_chests = collect and flags.chests and settings.global['lbf-allow-chest-take'].value == true
     -- Chest-take wins over trash drain: draining trash into a chest we raid
     -- back next cycle would churn items in a loop (auto-trash re-trashes them).
     local drain_trash = feed and flags.trash and not take_chests
     local take_ground = collect and flags.ground
 
-    if not (collect or feed_fuel or feed_ingredients or combat or drain_trash) then
+    if not (collect or feed_fuel or feed_ingredients or combat or drain_trash or rebalance) then
         return
     end
 
-    local entities = get_entities(player, data, take_chests or drain_trash, take_ground)
+    local entities = get_entities(player, data, anchor, take_chests or drain_trash, take_ground)
     --- @type LbfReport
     local report = { collected = {}, fed = {} }
 
     if collect then
         collect_pass(entities, main, take_chests, get_rivals(player, pending), report)
     end
+    local starved, saturated
+    if starvation then
+        starved, saturated = {}, {}
+    end
     if feed_fuel or feed_ingredients or combat then
         local totals = inventory_totals(main)
         local reserves = data.reserves
         if feed_fuel then
-            feed_fuel_pass(entities, main, totals, reserves, report)
+            -- Feed the ridden vehicle's own fuel slot too, without polluting
+            -- the cached entity list (only ever appended to a fresh copy).
+            local fuel_entities = entities
+            if vehicle and vehicle.valid and vehicle.get_fuel_inventory() then
+                fuel_entities = {}
+                for i = 1, #entities do
+                    fuel_entities[i] = entities[i]
+                end
+                fuel_entities[#fuel_entities + 1] = vehicle
+            end
+            feed_fuel_pass(fuel_entities, main, totals, reserves, report, starved, saturated)
         end
         if feed_ingredients then
-            feed_ingredients_pass(player, entities, main, totals, reserves, report)
+            feed_ingredients_pass(player, entities, main, totals, reserves, report, starved, saturated)
         end
         if combat then
             feed_ammo_pass(entities, main, totals, reserves, report)
         end
     end
+    if rebalance then
+        rebalance_pass(entities)
+    end
     if drain_trash then
         trash_pass(player, entities, report)
     end
-    flush_report(player, character.surface, data, report)
+    if starvation and (#starved > 0 or #saturated > 0) then
+        Rendering.flash_starvation(player, starved, saturated)
+    end
+    flush_report(player, anchor.surface, data, report)
 end
 
 return Raid

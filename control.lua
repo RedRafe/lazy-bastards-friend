@@ -108,8 +108,8 @@ on(defines.events.on_player_promoted, function(event)
     end
 end)
 
--- Renders live on a fixed surface and/or target the character entity, so any
--- surface/character change requires a destroy+redraw.
+-- Renders live on a fixed surface and/or target the character/vehicle entity,
+-- so any surface/character/vehicle change requires a destroy+redraw.
 for _, event_id in pairs({
     defines.events.on_player_changed_surface,
     defines.events.on_player_respawned,
@@ -123,6 +123,30 @@ for _, event_id in pairs({
         end
     end)
 end
+
+-- Vehicle support (DESIGN.md §10.9): the service area follows the vehicle
+-- while driving. Force an immediate rescan (stale cache would still center on
+-- the old anchor) alongside the AoE redraw.
+on(defines.events.on_player_driving_changed_state, function(event)
+    local player = game.get_player(event.player_index)
+    if player then
+        State.get_player_data(player.index).cache = nil
+        State.refresh(player)
+    end
+end)
+
+-- Per-entity exclusion cleanup (DESIGN.md §10.4): once an excluded entity is
+-- gone, drop it from every player's table — `useful_id` is already the
+-- entity's unit_number, so no separate registration-id map is needed.
+on(defines.events.on_object_destroyed, function(event)
+    local unit_number = event.useful_id
+    if not unit_number then
+        return
+    end
+    for _, data in pairs(storage.players) do
+        data.excluded[unit_number] = nil
+    end
+end)
 
 on(defines.events.on_player_color_changed, function(event)
     local player = game.get_player(event.player_index)
@@ -148,6 +172,34 @@ on('lbf-toggle', function(event)
     if player then
         Shortcut.toggle(player)
     end
+end)
+
+-- Per-entity exclusion toggle (DESIGN.md §10.4): hover an entity, press the
+-- (unbound-by-default) hotkey. No selection-tool item needed.
+on('lbf-toggle-exclude', function(event)
+    local player = game.get_player(event.player_index)
+    if not player then
+        return
+    end
+    local entity = player.selected
+    if not Raid.is_targetable(entity) then
+        player.create_local_flying_text({
+            text = { 'lbf-message.exclude-none' },
+            create_at_cursor = true,
+        })
+        return
+    end
+    local data = State.get_player_data(player.index)
+    local unit_number = entity.unit_number
+    if data.excluded[unit_number] then
+        data.excluded[unit_number] = nil
+        player.create_local_flying_text({ text = { 'lbf-message.included' }, create_at_cursor = true })
+    else
+        data.excluded[unit_number] = true
+        script.register_on_object_destroyed(entity)
+        player.create_local_flying_text({ text = { 'lbf-message.excluded' }, create_at_cursor = true })
+    end
+    data.cache = nil
 end)
 
 on(defines.events.on_runtime_mod_setting_changed, function(event)

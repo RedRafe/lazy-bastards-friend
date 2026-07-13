@@ -94,4 +94,63 @@ function Distribution.balanced_fill(counts, available, cap)
     return gives, used
 end
 
+--- Balanced machine-to-machine redistribution (DESIGN.md §1.1 pass 6, §12):
+--- reimplements the reference's `get_balanced_distribution`, but split into
+--- separate give/take arrays (this module's convention) instead of signed
+--- deltas. Holders are clamped to `cap` first — anything a holder carries
+--- above `cap` is left untouched (there is no legal destination for it: every
+--- other holder is already at or below the fair share), so it never counts
+--- toward the pool and is never withdrawn.
+--- @param counts integer[] current per-holder item counts
+--- @param cap integer max per-holder amount the fill/pool math considers
+--- @return integer[] gives per-holder amounts to receive
+--- @return integer[] takes per-holder amounts to give up
+function Distribution.rebalance(counts, cap)
+    local n = #counts
+    local gives, takes = {}, {}
+    for i = 1, n do
+        gives[i] = 0
+        takes[i] = 0
+    end
+    if n < 2 or cap <= 0 then
+        return gives, takes
+    end
+
+    local clamped = {}
+    local total = 0
+    for i = 1, n do
+        clamped[i] = math.min(counts[i], cap)
+        total = total + clamped[i]
+    end
+
+    local order = {}
+    for i = 1, n do
+        order[i] = i
+    end
+    table.sort(order, function(a, b)
+        if clamped[a] == clamped[b] then
+            return a < b
+        end
+        return clamped[a] < clamped[b]
+    end)
+
+    local base = math.floor(total / n)
+    local remainder = total % n
+    for _, i in ipairs(order) do
+        local target = base
+        if remainder > 0 then
+            remainder = remainder - 1
+            target = target + 1
+        end
+        local delta = target - clamped[i]
+        if delta > 0 then
+            gives[i] = delta
+        elseif delta < 0 then
+            takes[i] = -delta
+        end
+    end
+
+    return gives, takes
+end
+
 return Distribution

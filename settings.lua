@@ -154,4 +154,18 @@ data:extend({
         default_value = false,
         order = 'm',
     },
+    {
+        type = 'bool-setting',
+        name = 'lbf-rebalance',
+        setting_type = 'runtime-per-user',
+        default_value = false,
+        order = 'n',
+    },
+    {
+        type = 'bool-setting',
+        name = 'lbf-show-starvation',
+        setting_type = 'runtime-per-user',
+        default_value = false,
+        order = 'o',
+    },
 })

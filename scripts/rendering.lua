@@ -31,8 +31,10 @@ local function resolve_color(player, data, alpha)
     return { r = base.r * alpha, g = base.g * alpha, b = base.b * alpha, a = alpha }
 end
 
---- Destroy and (if any channel is effective and a character exists) redraw the AoE.
---- Registered as a State refresh handler.
+--- Destroy and (if any channel is effective and an anchor exists) redraw the
+--- AoE. Registered as a State refresh handler. The anchor is the vehicle
+--- being driven, or the character (DESIGN.md §10.9) — targeting either makes
+--- the engine move the render every tick for free, no per-tick Lua.
 --- @param player LuaPlayer
 function Rendering.refresh(player)
     local data = State.get_player_data(player.index)
@@ -41,21 +43,22 @@ function Rendering.refresh(player)
     if not player.connected or not State.any_effective(player.index) then
         return
     end
-    local character = player.character
-    if not character then
+    local vehicle = player.vehicle
+    local anchor = (vehicle and vehicle.valid and vehicle) or player.character
+    if not anchor then
         return
     end
 
     local radius = State.get_radius(player.index)
-    local surface = character.surface
+    local surface = anchor.surface
     local players = nil -- visible to everyone
     if not data.flags.show_others then
         players = { player.index }
     end
 
     if data.shape == 'square' then
-        local left_top = { entity = character, offset = { -radius, -radius } }
-        local right_bottom = { entity = character, offset = { radius, radius } }
+        local left_top = { entity = anchor, offset = { -radius, -radius } }
+        local right_bottom = { entity = anchor, offset = { radius, radius } }
         data.render.edge = rendering.draw_rectangle({
             color = resolve_color(player, data, EDGE_ALPHA),
             width = EDGE_WIDTH,
@@ -83,7 +86,7 @@ function Rendering.refresh(player)
             radius = radius,
             width = EDGE_WIDTH,
             filled = false,
-            target = character,
+            target = anchor,
             surface = surface,
             players = players,
             draw_on_ground = true,
@@ -93,10 +96,49 @@ function Rendering.refresh(player)
                 color = resolve_color(player, data, data.opacity),
                 radius = radius,
                 filled = true,
-                target = character,
+                target = anchor,
                 surface = surface,
                 players = players,
                 draw_on_ground = true,
+            })
+        end
+    end
+end
+
+-- Starvation feedback (DESIGN.md §10.10): short-lived icons over machines
+-- that wanted an item the player couldn't spare (starved) or that are
+-- already full (saturated). time_to_live self-cleans — no storage bookkeeping.
+local STARVATION_TICKS = 180
+local STARVED_TINT = { r = 1, g = 0.3, b = 0.3, a = 1 }
+local SATURATED_TINT = { r = 0.3, g = 1, b = 0.3, a = 1 }
+
+--- @param player LuaPlayer
+--- @param starved LuaEntity[]
+--- @param saturated LuaEntity[]
+function Rendering.flash_starvation(player, starved, saturated)
+    for _, entity in pairs(starved) do
+        if entity.valid then
+            rendering.draw_sprite({
+                sprite = 'utility/warning_icon',
+                tint = STARVED_TINT,
+                target = entity,
+                surface = entity.surface,
+                players = { player.index },
+                time_to_live = STARVATION_TICKS,
+                render_layer = 'entity-info-icon',
+            })
+        end
+    end
+    for _, entity in pairs(saturated) do
+        if entity.valid then
+            rendering.draw_sprite({
+                sprite = 'utility/check_mark_white',
+                tint = SATURATED_TINT,
+                target = entity,
+                surface = entity.surface,
+                players = { player.index },
+                time_to_live = STARVATION_TICKS,
+                render_layer = 'entity-info-icon',
             })
         end
     end

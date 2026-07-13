@@ -56,7 +56,14 @@ function State.init()
         if flags.summary == nil then
             flags.summary = false
         end
+        if flags.rebalance == nil then
+            flags.rebalance = false
+        end
+        if flags.starvation == nil then
+            flags.starvation = false
+        end
         data.summary = data.summary or { collected = {}, fed = {}, next_flush = 0 }
+        data.excluded = data.excluded or {}
         for name in pairs(data.reserves) do
             if not prototypes.item[name] then
                 data.reserves[name] = nil
@@ -76,6 +83,7 @@ end
 --- @field opacity double
 --- @field flags table<string, boolean>
 --- @field reserves table<string, uint>
+--- @field excluded table<uint, boolean> unit_number -> excluded from this player's raids (§10.4)
 --- @field cache {key: string, tick: uint, x: double, y: double, entities: LuaEntity[]}?
 --- @field render {edge: LuaRenderObject?, fill: LuaRenderObject?}
 --- @field idle uint
@@ -104,8 +112,11 @@ function State.get_player_data(player_index)
                 trash = false,
                 summary = false,
                 show_others = false,
+                rebalance = false,
+                starvation = false,
             },
             reserves = {},
+            excluded = {},
             render = {},
             idle = 0,
             gui_version = 0,
@@ -149,6 +160,14 @@ local PLAYER_SETTINGS = {
         get = function(data) return data.flags.summary end,
         set = function(data, value) data.flags.summary = value end,
     },
+    ['lbf-rebalance'] = {
+        get = function(data) return data.flags.rebalance end,
+        set = function(data, value) data.flags.rebalance = value end,
+    },
+    ['lbf-show-starvation'] = {
+        get = function(data) return data.flags.starvation end,
+        set = function(data, value) data.flags.starvation = value end,
+    },
     ['lbf-shape'] = {
         get = function(data) return data.shape end,
         set = function(data, value) data.shape = value == 'square' and 'square' or 'circle' end,
@@ -187,6 +206,8 @@ State.flag_setting = {
     trash = 'lbf-drain-trash',
     summary = 'lbf-show-summary',
     show_others = 'lbf-show-to-others',
+    rebalance = 'lbf-rebalance',
+    starvation = 'lbf-show-starvation',
 }
 
 --- Read one per-player mod setting into storage (settings screen -> storage).

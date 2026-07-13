@@ -4,16 +4,17 @@
 --- All interactions route through tags (element.tags.lbf_action), never element names.
 
 local State = require('__lazy-bastards-friend__.scripts.state')
+local set_style = require('__lazy-bastards-friend__.scripts.lib.style')
 
 local Gui = {}
 
 -- Bump to force a destroy+rebuild of every player's panel on join/config change.
-local GUI_VERSION = 3
+local GUI_VERSION = 4
 
 local FRAME_NAME = 'lbf-relative'
 
 -- Behavior toggles, in display order; each maps to data.flags[<flag>].
-local BEHAVIOR_FLAGS = { 'fuel', 'ingredients', 'chests', 'ground', 'trash', 'summary' }
+local BEHAVIOR_FLAGS = { 'fuel', 'ingredients', 'chests', 'ground', 'trash', 'rebalance', 'starvation', 'summary' }
 
 -- Per-player mod setting each behavior flag mirrors (State.push_setting, §8).
 local FLAG_SETTING = State.flag_setting
@@ -76,8 +77,7 @@ function Gui.build(player)
         })
     end
 
-    local radius_flow = content.add({ type = 'flow', name = 'radius-flow', direction = 'horizontal' })
-    radius_flow.style.vertical_align = 'center'
+    local radius_flow = set_style(content.add({ type = 'flow', name = 'radius-flow', direction = 'horizontal' }), { vertical_align = 'center' })
     radius_flow.add({ type = 'label', name = 'radius-label', caption = { 'lbf-gui.radius' }, tooltip = { 'lbf-gui.radius-tooltip' } })
     radius_flow.add({
         type = 'slider',
@@ -93,8 +93,7 @@ function Gui.build(player)
     content.add({ type = 'line', name = 'separator-appearance' })
     content.add({ type = 'label', name = 'appearance-label', caption = { 'lbf-gui.appearance' }, style = 'caption_label' })
 
-    local shape_flow = content.add({ type = 'flow', name = 'shape-flow', direction = 'horizontal' })
-    shape_flow.style.vertical_align = 'center'
+    local shape_flow = set_style(content.add({ type = 'flow', name = 'shape-flow', direction = 'horizontal' }), { vertical_align = 'center' })
     shape_flow.add({ type = 'label', name = 'shape-label', caption = { 'lbf-gui.shape' } })
     shape_flow.add({
         type = 'drop-down',
@@ -104,8 +103,7 @@ function Gui.build(player)
         tags = { lbf_action = 'shape' },
     })
 
-    local fill_flow = content.add({ type = 'flow', name = 'fill-flow', direction = 'horizontal' })
-    fill_flow.style.vertical_align = 'center'
+    local fill_flow = set_style(content.add({ type = 'flow', name = 'fill-flow', direction = 'horizontal' }), { vertical_align = 'center' })
     fill_flow.add({
         type = 'checkbox',
         name = 'lbf-fill',
@@ -135,8 +133,7 @@ function Gui.build(player)
 
     local color_flow = content.add({ type = 'flow', name = 'color-flow', direction = 'vertical' })
     for _, component in pairs(COLOR_COMPONENTS) do
-        local row = color_flow.add({ type = 'flow', name = 'row-' .. component, direction = 'horizontal' })
-        row.style.vertical_align = 'center'
+        local row = set_style(color_flow.add({ type = 'flow', name = 'row-' .. component, direction = 'horizontal' }), { vertical_align = 'center' })
         row.add({ type = 'label', name = 'label', caption = { 'lbf-gui.color-' .. component } })
         row.add({
             type = 'slider',
@@ -160,8 +157,7 @@ function Gui.build(player)
 
     content.add({ type = 'line', name = 'separator-reserves' })
 
-    local reserves_header = content.add({ type = 'flow', name = 'reserves-header', direction = 'horizontal' })
-    reserves_header.style.vertical_align = 'center'
+    local reserves_header = set_style(content.add({ type = 'flow', name = 'reserves-header', direction = 'horizontal' }), { vertical_align = 'center' })
     reserves_header.add({
         type = 'label',
         name = 'reserves-label',
@@ -169,8 +165,7 @@ function Gui.build(player)
         tooltip = { 'lbf-gui.reserves-tooltip' },
         style = 'caption_label',
     })
-    local spacer = reserves_header.add({ type = 'empty-widget', name = 'spacer' })
-    spacer.style.horizontally_stretchable = true
+    set_style(reserves_header.add({ type = 'empty-widget', name = 'spacer' }), { horizontally_stretchable = true })
     reserves_header.add({
         type = 'button',
         name = 'lbf-reserves-import',
@@ -181,8 +176,7 @@ function Gui.build(player)
 
     content.add({ type = 'table', name = 'lbf-reserves', column_count = 3 })
 
-    local add_flow = content.add({ type = 'flow', name = 'reserves-add-flow', direction = 'horizontal' })
-    add_flow.style.vertical_align = 'center'
+    local add_flow = set_style(content.add({ type = 'flow', name = 'reserves-add-flow', direction = 'horizontal' }), { vertical_align = 'center' })
     add_flow.add({
         type = 'choose-elem-button',
         name = 'lbf-reserve-add',
@@ -250,16 +244,13 @@ local function sync_reserves(grid, reserves)
     end
     table.sort(names)
     for _, name in pairs(names) do
-        local icon = grid.add({
+        set_style(grid.add({
             type = 'sprite',
             sprite = 'item/' .. name,
             tooltip = prototypes.item[name].localised_name,
             tags = { item = name },
-        })
-        icon.style.width = 28
-        icon.style.height = 28
-        icon.style.stretch_image_to_widget_size = true
-        local count = grid.add({
+        }), { width = 28, height = 28, stretch_image_to_widget_size = true })
+        set_style(grid.add({
             type = 'textfield',
             text = tostring(reserves[name]),
             numeric = true,
@@ -267,8 +258,7 @@ local function sync_reserves(grid, reserves)
             allow_negative = false,
             tooltip = { 'lbf-gui.reserve-count-tooltip' },
             tags = { lbf_action = 'reserve-count', item = name },
-        })
-        count.style.width = 60
+        }), { width = 60 })
         grid.add({
             type = 'sprite-button',
             sprite = 'utility/trash',

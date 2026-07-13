@@ -6,6 +6,12 @@ data:extend({
         action = 'lua',
     },
     {
+        type = 'custom-input',
+        name = 'lbf-toggle-exclude',
+        key_sequence = '',
+        action = 'lua',
+    },
+    {
         type = 'shortcut',
         name = 'lbf-toggle',
         action = 'lua',

@@ -97,6 +97,7 @@ Full per-player state:
   flags     = {            -- behavior toggles (see set_player_flag)
     fuel = true, ingredients = true, chests = false, ground = false,
     trash = false, summary = false, show_others = false,
+    rebalance = false, starvation = false,
   },
   reserves  = { ['coal'] = 50 },  -- item name -> protected minimum
 }
@@ -118,6 +119,8 @@ their panel. Valid flag names:
 | `'trash'` | `false` | Feed channel drains logistic trash slots into nearby chests (paused while `chests` is active) |
 | `'summary'` | `false` | show a per-cycle floating summary of what was moved |
 | `'show_others'` | `false` | the player's area render is visible to everyone |
+| `'rebalance'` | `false` | Feed channel moves surplus fuel/ingredients between over- and under-stocked machines, even when the player carries nothing (§1.1 pass 6) |
+| `'starvation'` | `false` | briefly show a red icon over machines that wanted an item the player couldn't spare, or green over ones already full |
 
 ```lua
 -- Scenario hands out pre-configured chest raiding:
@@ -181,6 +184,31 @@ name, index, or LuaForce.
 
 ```lua
 game.print(remote.call('lazy-bastards-friend', 'get_spm', 'player'))
+```
+
+### `set_entity_excluded(player_index, unit_number, excluded)`
+
+Exclude or include one entity from a player's raids (DESIGN.md §10.4), as if
+they hovered it and pressed the exclude hotkey. Unlike the hotkey path, this
+call only has a bare `unit_number` — not a `LuaEntity` — so it **cannot**
+register destruction cleanup for you. If the entity might be destroyed while
+still excluded, clear the exclusion yourself (e.g. on your own
+`on_object_destroyed` registration) to avoid leaking an entry.
+
+| arg | type | |
+|---|---|---|
+| `player_index` | `uint` | |
+| `unit_number` | `uint` | the target entity's `unit_number` |
+| `excluded` | `boolean` | |
+
+```lua
+remote.call('lazy-bastards-friend', 'set_entity_excluded', 1, furnace.unit_number, true)
+```
+
+### `is_entity_excluded(player_index, unit_number)` → `boolean`
+
+```lua
+if remote.call('lazy-bastards-friend', 'is_entity_excluded', 1, furnace.unit_number) then ... end
 ```
 
 ## Scenario example

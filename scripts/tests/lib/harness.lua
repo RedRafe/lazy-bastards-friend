@@ -94,13 +94,6 @@ end
 --- banner (set by Gui.finish) — nothing is printed to chat and the game
 --- keeps running normally afterwards (no game_finished modal), so you can
 --- keep poking at the admin GUI to debug a failure without the view freezing.
---- We used to also raise the Factorio-native win screen via
---- game.set_win_ending_info for the all-passed case, mirroring base's
---- silo-script.lua, but that modal's bullet-point list sits in a
---- `deep_scroll_pane_with_padding` with `vertically_stretchable: off` baked
---- into the base game style, so it never expands to fill the dialog and
---- looks cramped with only a handful of checks — dropping it in favor of the
---- panel above removes both the duplication and the layout we can't control.
 --- @param delay_ticks uint how long to wait before finishing, should exceed the
 ---   longest `eventually`/`watch` timeout registered in this level
 local summary_scheduled = false

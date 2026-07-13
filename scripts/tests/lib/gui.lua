@@ -8,6 +8,8 @@
 --- `inside_shallow_frame` sections with `subheader_frame` headers (Instructions,
 --- Checks) rather than bare labels stacked in a column.
 
+local set_style = require('__lazy-bastards-friend__.scripts.lib.style')
+
 local Gui = {}
 
 local FRAME_NAME = 'lbf-test-results'
@@ -38,10 +40,8 @@ end
 --- @return LuaGuiElement header flow, holding the title label and (once added by the caller) any trailing widgets
 local function add_section(frame, name, caption)
     local inner = frame.add({ type = 'frame', name = name, style = 'inside_shallow_frame', direction = 'vertical' })
-    local header = inner.add({ type = 'frame', name = 'lbf-header', style = 'subheader_frame' })
-    header.style.horizontally_stretchable = true
-    local header_flow = header.add({ type = 'flow', name = 'lbf-header-flow', direction = 'horizontal' })
-    header_flow.style.horizontally_stretchable = true
+    local header = set_style(inner.add({ type = 'frame', name = 'lbf-header', style = 'subheader_frame' }), { horizontally_stretchable = true })
+    local header_flow = set_style(header.add({ type = 'flow', name = 'lbf-header-flow', direction = 'horizontal' }), { horizontally_stretchable = true })
     header_flow.add({ type = 'label', caption = caption, style = 'subheader_caption_label' })
     return inner, header_flow
 end
@@ -49,9 +49,7 @@ end
 --- Adds a flexible, stretching spacer — mirrors utils.gui's `add_pusher`.
 --- @param element LuaGuiElement
 function Gui.add_pusher(element)
-    local pusher = element.add({ type = 'empty-widget' })
-    pusher.style.horizontally_stretchable = true
-    return pusher
+    return set_style(element.add({ type = 'empty-widget' }), { horizontally_stretchable = true })
 end
 
 --- Small bordered tile showing a big colored number over a caption — used for
@@ -62,15 +60,13 @@ end
 --- @param caption LocalisedString
 --- @return LuaGuiElement
 local function add_stat_tile(parent, name, color, caption)
-    local tile = parent.add({ type = 'frame', name = name, style = 'bordered_frame', direction = 'vertical' })
-    tile.style.padding = 4
-    tile.style.horizontally_stretchable = true
-    tile.style.horizontal_align = 'center'
-    local number = tile.add({ type = 'label', name = 'lbf-number', caption = '0' })
-    number.style.font = 'default-large-bold'
-    number.style.font_color = color
-    local label = tile.add({ type = 'label', name = 'lbf-label', caption = caption })
-    label.style.font_color = { 170, 170, 170 }
+    local tile = set_style(parent.add({ type = 'frame', name = name, style = 'bordered_frame', direction = 'vertical' }), {
+        padding = 4,
+        horizontally_stretchable = true,
+        horizontal_align = 'center',
+    })
+    set_style(tile.add({ type = 'label', name = 'lbf-number', caption = '0' }), { font = 'default-large-bold', font_color = color })
+    set_style(tile.add({ type = 'label', name = 'lbf-label', caption = caption }), { font_color = { 170, 170, 170 } })
     return tile
 end
 
@@ -82,48 +78,48 @@ local function ensure_frame(player)
         return existing
     end
 
-    local frame = player.gui.screen.add({ type = 'frame', name = FRAME_NAME, direction = 'vertical' })
-    frame.style.width = 420
+    local frame = set_style(player.gui.screen.add({ type = 'frame', name = FRAME_NAME, direction = 'vertical' }), { width = 420 })
     frame.location = { x = 8, y = 8 }
 
     local titlebar = frame.add({ type = 'flow', name = 'lbf-titlebar', direction = 'horizontal' })
     titlebar.drag_target = frame
     titlebar.add({ type = 'label', name = 'lbf-tag', style = 'frame_title', ignored_by_interaction = true })
-    local drag = titlebar.add({ type = 'empty-widget', style = 'draggable_space_header', ignored_by_interaction = true })
-    drag.style.horizontally_stretchable = true
-    drag.style.height = 24
+    set_style(titlebar.add({ type = 'empty-widget', style = 'draggable_space_header', ignored_by_interaction = true }), {
+        horizontally_stretchable = true,
+        height = 24,
+    })
 
-    local canvas = frame.add({ type = 'flow', name = 'lbf-canvas', direction = 'vertical' })
-    canvas.style.vertical_spacing = 6
+    local canvas = set_style(frame.add({ type = 'flow', name = 'lbf-canvas', direction = 'vertical' }), { vertical_spacing = 6 })
 
     local instructions = add_section(canvas, 'lbf-instructions', { 'lbf-gui.instructions-title' })
-    local lines_flow = instructions.add({ type = 'flow', name = 'lbf-lines', direction = 'vertical' })
-    lines_flow.style.padding = 8
+    set_style(instructions.add({ type = 'flow', name = 'lbf-lines', direction = 'vertical' }), { padding = 8 })
 
     local checks = add_section(canvas, 'lbf-checks', { 'lbf-gui.checks-title' })
 
-    local stats = checks.add({ type = 'flow', name = 'lbf-stats', direction = 'horizontal' })
-    stats.style.padding = 8
-    stats.style.horizontal_spacing = 6
+    local stats = set_style(checks.add({ type = 'flow', name = 'lbf-stats', direction = 'horizontal' }), {
+        padding = 8,
+        horizontal_spacing = 6,
+    })
     add_stat_tile(stats, 'lbf-stat-pending', { 170, 170, 170 }, { 'lbf-gui.stat-pending' })
     add_stat_tile(stats, 'lbf-stat-passed', { 120, 220, 80 }, { 'lbf-gui.stat-passed' })
     add_stat_tile(stats, 'lbf-stat-failed', { 220, 80, 80 }, { 'lbf-gui.stat-failed' })
 
-    local pane = checks.add({ type = 'scroll-pane', name = 'lbf-pane' })
-    pane.style.maximal_height = 360
-    pane.style.padding = 8
-    pane.style.top_padding = 0
-    local grid = pane.add({ type = 'table', name = 'lbf-rows', column_count = 2 })
-    grid.style.horizontal_spacing = 12
-    grid.style.vertical_spacing = 4
+    local pane = set_style(checks.add({ type = 'scroll-pane', name = 'lbf-pane', vertical_scroll_policy = 'never' }), {
+        padding = 8,
+        top_padding = 0,
+    })
+    set_style(pane.add({ type = 'table', name = 'lbf-rows', column_count = 2 }), {
+        horizontal_spacing = 12,
+        vertical_spacing = 4,
+    })
 
-    local final = canvas.add({ type = 'frame', name = 'lbf-final-frame', style = 'neutral_message_frame', direction = 'vertical' })
-    final.style.horizontally_stretchable = true
-    final.style.horizontal_align = 'center'
-    final.style.padding = 8
+    local final = set_style(canvas.add({ type = 'frame', name = 'lbf-final-frame', style = 'neutral_message_frame', direction = 'vertical' }), {
+        horizontally_stretchable = true,
+        horizontal_align = 'center',
+        padding = 8,
+    })
     final.visible = false
-    local final_title = final.add({ type = 'label', name = 'lbf-final-title' })
-    final_title.style.font = 'default-large-bold'
+    set_style(final.add({ type = 'label', name = 'lbf-final-title' }), { font = 'default-large-bold' })
     final.add({ type = 'label', name = 'lbf-final-counts' })
 
     return frame
@@ -140,9 +136,7 @@ local function rebuild(frame)
     instructions.visible = header ~= nil and #header.lines > 0
     if header then
         for _, line in pairs(header.lines) do
-            local label = lines_flow.add({ type = 'label', caption = line })
-            label.style.single_line = false
-            label.style.maximal_width = 380
+            set_style(lines_flow.add({ type = 'label', caption = line }), { single_line = false, maximal_width = 380 })
         end
     end
 
@@ -168,7 +162,10 @@ local function rebuild(frame)
     local grid = checks['lbf-pane']['lbf-rows']
     grid.clear()
     for index, row in pairs(rows) do
-        grid.add({ type = 'label', caption = index .. '. ' .. row.name })
+        set_style(grid.add({ type = 'label', caption = index .. '. ' .. row.name }), {
+            single_line = false,
+            maximal_width = 280,
+        })
         local status_label = grid.add({ type = 'label', caption = status_caption(row.status) })
         if row.extra then
             status_label.tooltip = row.extra
@@ -178,10 +175,8 @@ local function rebuild(frame)
     local final_frame = canvas['lbf-final-frame']
     if finished then
         final_frame.visible = true
-        final_frame.style = finished.failed == 0 and 'positive_message_frame' or 'negative_message_frame'
-        final_frame.style.horizontally_stretchable = true
-        final_frame.style.horizontal_align = 'center'
-        final_frame.style.padding = 8
+        set_style(final_frame, finished.failed == 0 and 'positive_message_frame' or 'negative_message_frame')
+        set_style(final_frame, { horizontally_stretchable = true, horizontal_align = 'center', padding = 8 })
         final_frame['lbf-final-title'].caption = finished.failed == 0
             and { 'lbf-gui.final-title-passed' }
             or { 'lbf-gui.final-title-failed' }
