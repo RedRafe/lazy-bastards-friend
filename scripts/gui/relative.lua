@@ -26,6 +26,9 @@ local IMPORT_GROUP = 'LBF'
 
 local COLOR_COMPONENTS = { 'r', 'g', 'b' }
 
+-- Slider styles matching Factorio's own player-color picker.
+local COLOR_SLIDER_STYLE = { r = 'red_slider', g = 'green_slider', b = 'blue_slider' }
+
 --- @param player LuaPlayer
 --- @return LuaGuiElement?
 local function get_frame(player)
@@ -135,11 +138,22 @@ function Gui.build(player)
         row.add({
             type = 'slider',
             name = 'lbf-color-' .. component,
+            style = COLOR_SLIDER_STYLE[component],
             minimum_value = 0,
             maximum_value = 255,
             value = 255,
             value_step = 1,
             tags = { lbf_action = 'color', component = component },
+        })
+        row.add({
+            type = 'textfield',
+            name = 'lbf-color-value-' .. component,
+            style = 'slider_value_textfield',
+            text = '255',
+            numeric = true,
+            allow_decimal = false,
+            allow_negative = false,
+            tags = { lbf_action = 'color-text', component = component },
         })
     end
 
@@ -325,8 +339,10 @@ function Gui.sync(player)
     local color_flow = content['color-flow']
     color_flow.visible = not data.use_player_color
     for _, component in pairs(COLOR_COMPONENTS) do
-        color_flow['row-' .. component]['lbf-color-' .. component].slider_value =
-            math.floor((data.color[component] or 0) * 255 + 0.5)
+        local row = color_flow['row-' .. component]
+        local value = math.floor((data.color[component] or 0) * 255 + 0.5)
+        row['lbf-color-' .. component].slider_value = value
+        row['lbf-color-value-' .. component].text = tostring(value)
     end
     content['lbf-flag-show_others'].state = flags.show_others == true
 
@@ -416,6 +432,15 @@ function Gui.dispatch(event)
         data.color.a = 1
         State.push_setting(player, 'lbf-color')
         State.refresh(player)
+    elseif action == 'color-text' then
+        local component = tags.component --[[@as string]]
+        local value = tonumber(element.text)
+        if value and value >= 0 and value <= 255 then
+            data.color[component] = value / 255
+            data.color.a = 1
+            State.push_setting(player, 'lbf-color')
+            State.refresh(player)
+        end
     elseif action == 'reserve-add' then
         local name = element.elem_value --[[@as string?]]
         element.elem_value = nil
