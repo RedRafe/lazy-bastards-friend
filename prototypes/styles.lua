@@ -59,6 +59,13 @@ styles.lbf_open_button = {
 
 -- 308 = width the reserve editor row pushes the panel to (with the 28px elem
 -- button below), so opening the editor doesn't resize the frame.
+-- Wordmark banner at the top of the open panel.
+styles.lbf_banner_image = {
+    type = 'image_style',
+    top_margin = 8,
+    bottom_margin = 4,
+}
+
 styles.lbf_relative_frame = {
     type = 'frame_style',
     parent = 'frame',
@@ -95,7 +102,7 @@ styles.lbf_reserves_footer_frame = {
 -- default to match the 28px-tall slider/textfield row and save panel width.
 styles.lbf_reserve_elem_button = {
     type = 'button_style',
-    parent = 'slot_button',
+    parent = 'slot_button_in_shallow_frame',
     size = 28,
 }
 

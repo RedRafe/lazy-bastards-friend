@@ -37,6 +37,18 @@ data:extend({
         mipmap_count = 2,
         flags = { 'gui-icon' },
     },
+    -- Wordmark banner atop the open relative panel. Authored at 2x and drawn
+    -- at scale 0.5 so it stays crisp up to 200% GUI scale (no mip strip).
+    {
+        type = 'sprite',
+        name = 'lbf-banner',
+        filename = '__lazy-bastards-friend__/graphics/gui/lbf-banner.png',
+        priority = 'extra-high-no-scale',
+        width = 536,
+        height = 180,
+        scale = 0.5,
+        flags = { 'gui' },
+    },
     -- Statistics-only item: the runtime pumps transferred
     -- counts into item production statistics under this name, so the mod's
     -- activity shows up in the vanilla production graphs (like base's 'science').
