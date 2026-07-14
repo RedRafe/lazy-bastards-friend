@@ -16,9 +16,12 @@ local set_style = GuiUtil.set_style
 local Gui = {}
 
 -- Bump to force a destroy+rebuild of every player's panel on join/config change.
-local GUI_VERSION = 1
+local GUI_VERSION = 5
 
 local FRAME_NAME = 'lbf-relative'
+
+-- Slot columns in the reserved-items grid; filter_slot_table sizes the pane to this.
+local RESERVE_COLUMNS = 6
 
 local ANCHOR = {
     gui = defines.relative_gui_type.controller_gui,
@@ -292,27 +295,80 @@ function Gui.build(player)
 
     local reserves_body = add_section(content, 'reserves', { 'lbf-gui.reserves' }, { 'lbf-gui.reserves-tooltip' })
 
-    local reserves_header = reserves_body.add({ type = 'flow', name = 'reserves-header', direction = 'horizontal', style = 'lbf_row_flow' })
-    GuiUtil.add_pusher(reserves_header)
-    reserves_header.add({
-        type = 'button',
+    -- The pane hugs the grid's width; pushers on both sides center it in the body.
+    local pane_row = reserves_body.add({ type = 'flow', name = 'reserves-pane-row', direction = 'horizontal' })
+    GuiUtil.add_pusher(pane_row)
+    local reserves_pane = pane_row.add({
+        type = 'scroll-pane',
+        name = 'reserves-pane',
+        style = 'lbf_reserves_scroll_pane',
+        horizontal_scroll_policy = 'never',
+    })
+    GuiUtil.add_pusher(pane_row)
+    reserves_pane.add({ type = 'table', name = 'lbf-reserves', style = 'filter_slot_table', column_count = RESERVE_COLUMNS })
+
+    -- Inline set-reserve editor, hidden until a slot is clicked (never a
+    -- separate window — that would fight the character screen for focus).
+    local editor = reserves_body.add({
+        type = 'flow',
+        name = 'reserve-editor',
+        direction = 'horizontal',
+        style = 'lbf_row_flow',
+        visible = false,
+    })
+    editor.add({
+        type = 'choose-elem-button',
+        name = 'lbf-reserve-elem',
+        style = 'lbf_reserve_elem_button',
+        elem_type = 'item',
+        tooltip = { 'lbf-gui.reserve-add-tooltip' },
+        tags = { lbf_action = 'reserve-editor-elem' },
+    })
+    editor.add({
+        type = 'textfield',
+        name = 'lbf-reserve-count',
+        style = 'slider_value_textfield',
+        numeric = true,
+        allow_decimal = false,
+        allow_negative = false,
+        tooltip = { 'lbf-gui.reserve-count-tooltip' },
+        tags = { lbf_action = 'reserve-editor-count' },
+    })
+    editor.add({
+        type = 'slider',
+        name = 'lbf-reserve-slider',
+        style = 'lbf_reserve_slider',
+        minimum_value = 0,
+        maximum_value = 100,
+        value = 0,
+        tooltip = { 'lbf-gui.reserve-count-tooltip' },
+        tags = { lbf_action = 'reserve-editor-slider' },
+    })
+    editor.add({
+        type = 'sprite-button',
+        name = 'lbf-reserve-confirm',
+        style = 'item_and_count_select_confirm',
+        sprite = 'utility/check_mark',
+        tags = { lbf_action = 'reserve-editor-confirm' },
+    })
+
+    -- Import bar at the bottom of the section, styled like the map
+    -- generator's "Map exchange string" subfooter.
+    local import_footer = reserves_body.add({ type = 'frame', name = 'import-footer', style = 'lbf_reserves_footer_frame' })
+    local import_flow = set_style(
+        import_footer.add({ type = 'flow', name = 'flow', direction = 'horizontal', style = 'player_input_horizontal_flow' }),
+        { horizontally_stretchable = true }
+    )
+    GuiUtil.add_pusher(import_flow)
+    import_flow.add({ type = 'label', name = 'label', caption = { 'lbf-gui.reserves-import' }, style = 'caption_label' })
+    import_flow.add({
+        type = 'sprite-button',
         name = 'lbf-reserves-import',
-        caption = { 'lbf-gui.reserves-import' },
+        style = 'tool_button',
+        sprite = 'utility/import',
         tooltip = { 'lbf-gui.reserves-import-tooltip', IMPORT_GROUP_TAG .. '::' .. player.name },
         tags = { lbf_action = 'reserve-import' },
     })
-
-    reserves_body.add({ type = 'table', name = 'lbf-reserves', column_count = 3 })
-
-    local add_flow = reserves_body.add({ type = 'flow', name = 'reserves-add-flow', direction = 'horizontal', style = 'lbf_row_flow' })
-    add_flow.add({
-        type = 'choose-elem-button',
-        name = 'lbf-reserve-add',
-        elem_type = 'item',
-        tooltip = { 'lbf-gui.reserve-add-tooltip' },
-        tags = { lbf_action = 'reserve-add' },
-    })
-    add_flow.add({ type = 'label', name = 'add-label', caption = { 'lbf-gui.reserve-add' } })
 
     data.gui_version = GUI_VERSION
     Gui.sync(player)
@@ -326,34 +382,36 @@ function Gui.ensure(player)
     end
 end
 
---- True when the rendered reserve rows show exactly the items in `reserves` —
---- counts may lag (they are only re-read on rebuild) but the set is what matters;
---- skipping the rebuild keeps a textfield being typed in alive.
+--- True when the rendered slots already show exactly these items and counts —
+--- sync runs on every panel interaction, so skip the rebuild when nothing changed.
 --- @param grid LuaGuiElement
 --- @param reserves table<string, uint>
 --- @return boolean
-local function reserve_rows_match(grid, reserves)
+local function reserve_slots_match(grid, reserves)
     local total = 0
     for _ in pairs(reserves) do
         total = total + 1
     end
     local children = grid.children
-    if #children ~= total * 3 then
+    if #children ~= total + 1 then
         return false
     end
-    for i = 1, #children, 3 do
+    for i = 1, total do
         local item = children[i].tags.item
-        if not item or reserves[item] == nil then
+        if not item or reserves[item] ~= children[i].number then
             return false
         end
     end
     return true
 end
 
+--- One slot per reserved item (count on the number badge) plus a trailing
+--- empty slot that appends a new item. All editing goes through the inline
+--- set-reserve editor row (left-click); right-click removes the item.
 --- @param grid LuaGuiElement
 --- @param reserves table<string, uint>
 local function sync_reserves(grid, reserves)
-    if reserve_rows_match(grid, reserves) then
+    if reserve_slots_match(grid, reserves) then
         return
     end
     grid.clear()
@@ -364,30 +422,94 @@ local function sync_reserves(grid, reserves)
     table.sort(names)
     for _, name in pairs(names) do
         grid.add({
-            type = 'sprite',
-            style = 'lbf_reserve_sprite',
-            sprite = 'item/' .. name,
-            tooltip = prototypes.item[name].localised_name,
-            tags = { item = name },
-        })
-        grid.add({
-            type = 'textfield',
-            style = 'lbf_reserve_textfield',
-            text = tostring(reserves[name]),
-            numeric = true,
-            allow_decimal = false,
-            allow_negative = false,
-            tooltip = { 'lbf-gui.reserve-count-tooltip' },
-            tags = { lbf_action = 'reserve-count', item = name },
-        })
-        grid.add({
             type = 'sprite-button',
-            sprite = 'utility/trash',
-            style = 'tool_button_red',
-            tooltip = { 'lbf-gui.reserve-remove' },
-            tags = { lbf_action = 'reserve-remove', item = name },
+            style = 'slot_button',
+            sprite = 'item/' .. name,
+            number = reserves[name],
+            elem_tooltip = { type = 'item', name = name },
+            tooltip = { 'lbf-gui.reserve-slot-tooltip' },
+            tags = { lbf_action = 'reserve-slot', item = name },
         })
     end
+    grid.add({
+        type = 'sprite-button',
+        style = 'slot_button',
+        tooltip = { '', { 'lbf-gui.reserve-add' }, '\n', { 'lbf-gui.reserve-add-tooltip' } },
+        tags = { lbf_action = 'reserve-slot' },
+    })
+end
+
+--- The inline set-reserve editor row of the reserves section, or nil when the
+--- panel is collapsed to the open button.
+--- @param player LuaPlayer
+--- @return LuaGuiElement?
+local function get_reserve_editor(player)
+    local frame = get_frame(player)
+    local content = frame and frame.type == 'frame' and frame.content
+    return content and section_frame(content, 'reserves').body['reserve-editor'] or nil
+end
+
+--- Enable/refresh the editor's amount widgets for the currently picked item.
+--- Slider notches sit at full stacks (0–10); the textfield takes anything.
+--- @param editor LuaGuiElement the editor row
+--- @param item string? picked item, nil when the elem button is empty
+--- @param count uint? amount to show (defaults kept by callers)
+local function sync_editor_count(editor, item, count)
+    local slider = editor['lbf-reserve-slider']
+    local textfield = editor['lbf-reserve-count']
+    local enabled = item ~= nil
+    slider.enabled = enabled
+    textfield.enabled = enabled
+    editor['lbf-reserve-confirm'].enabled = enabled
+    if item then
+        local stack = prototypes.item[item].stack_size
+        -- Step must stay compatible with the bounds at every point, so reset
+        -- it before shrinking the range (the previous item's stack could be
+        -- larger than the new maximum).
+        slider.set_slider_value_step(1)
+        slider.set_slider_minimum_maximum(0, 10 * stack)
+        slider.set_slider_value_step(stack)
+        slider.slider_value = count --[[@as number]]
+        textfield.text = tostring(count)
+    else
+        textfield.text = ''
+    end
+end
+
+--- Show the editor row prefilled for `item` (nil = adding a new reserve).
+--- The slot it was opened from is kept in the row's tags so confirming with a
+--- different item replaces it.
+--- @param player LuaPlayer
+--- @param data LbfPlayerData
+--- @param item string?
+local function open_reserve_editor(player, data, item)
+    local editor = get_reserve_editor(player)
+    if not editor then
+        return
+    end
+    editor.visible = true
+    editor.tags = { item = item }
+    editor['lbf-reserve-elem'].elem_value = item
+    sync_editor_count(editor, item, item and (data.reserves[item] or prototypes.item[item].stack_size))
+end
+
+--- Apply the editor: write the picked item/amount into reserves (replacing the
+--- edited item if the picker changed; amount 0 clears it) and hide the row.
+--- @param player LuaPlayer
+--- @param data LbfPlayerData
+--- @param editor LuaGuiElement
+local function confirm_reserve_editor(player, data, editor)
+    local item = editor['lbf-reserve-elem'].elem_value --[[@as string?]]
+    local original = editor.tags.item --[[@as string?]]
+    if original and original ~= item then
+        data.reserves[original] = nil
+    end
+    if item then
+        local count = math.floor(tonumber(editor['lbf-reserve-count'].text) or 0)
+        data.reserves[item] = count > 0 and count or nil
+    end
+    editor.visible = false
+    State.refresh(player)
 end
 
 --- @param checkbox LuaGuiElement
@@ -497,7 +619,7 @@ function Gui.sync(player)
         sync_flag_checkbox(appearance_body['lbf-flag-' .. flag], flags, flag)
     end
 
-    sync_reserves(section_frame(content, 'reserves').body['lbf-reserves'], data.reserves)
+    sync_reserves(section_frame(content, 'reserves').body['reserves-pane-row']['reserves-pane']['lbf-reserves'], data.reserves)
 end
 
 --- Copy minimum values from the player's logistic group named `LBF::<player-name>`
@@ -535,7 +657,7 @@ local function import_reserves(player, data)
     end
 end
 
---- @param event EventData.on_gui_checked_state_changed|EventData.on_gui_value_changed|EventData.on_gui_click|EventData.on_gui_elem_changed|EventData.on_gui_text_changed|EventData.on_gui_selection_state_changed|EventData.on_gui_switch_state_changed
+--- @param event EventData.on_gui_checked_state_changed|EventData.on_gui_value_changed|EventData.on_gui_click|EventData.on_gui_elem_changed|EventData.on_gui_text_changed|EventData.on_gui_selection_state_changed|EventData.on_gui_switch_state_changed|EventData.on_gui_confirmed
 function Gui.dispatch(event)
     local element = event.element
     if not (element and element.valid) then
@@ -604,23 +726,37 @@ function Gui.dispatch(event)
             State.push_setting(player, 'lbf-color')
             State.refresh(player)
         end
-    elseif action == 'reserve-add' then
-        local name = element.elem_value --[[@as string?]]
-        element.elem_value = nil
-        if name and data.reserves[name] == nil then
-            data.reserves[name] = prototypes.item[name].stack_size
-            State.refresh(player)
+    elseif action == 'reserve-slot' then
+        local item = tags.item --[[@as string?]]
+        if event.button == defines.mouse_button_type.right then
+            if item then
+                data.reserves[item] = nil
+                local editor = get_reserve_editor(player)
+                if editor and editor.tags.item == item then
+                    editor.visible = false -- it was editing the removed item
+                end
+                State.refresh(player)
+            end
+        else
+            open_reserve_editor(player, data, item)
         end
-    elseif action == 'reserve-count' then
-        -- Storage-only update: no refresh, or the rebuild would eat the
-        -- textfield mid-typing. The value shown is already what was typed.
-        local count = tonumber(element.text)
-        if count and count >= 0 then
-            data.reserves[tags.item --[[@as string]]] = math.floor(count)
+    elseif action == 'reserve-editor-elem' then
+        -- The picker button also receives plain clicks; only react to the pick.
+        if event.name == defines.events.on_gui_elem_changed then
+            local item = element.elem_value --[[@as string?]]
+            sync_editor_count(element.parent, item, item and (data.reserves[item] or prototypes.item[item].stack_size))
         end
-    elseif action == 'reserve-remove' then
-        data.reserves[tags.item --[[@as string]]] = nil
-        State.refresh(player)
+    elseif action == 'reserve-editor-slider' then
+        element.parent['lbf-reserve-count'].text = tostring(element.slider_value)
+    elseif action == 'reserve-editor-count' then
+        if event.name == defines.events.on_gui_confirmed then
+            confirm_reserve_editor(player, data, element.parent)
+        else
+            -- Mid-typing: follow with the slider (clamped), never touch the text.
+            element.parent['lbf-reserve-slider'].slider_value = tonumber(element.text) or 0
+        end
+    elseif action == 'reserve-editor-confirm' then
+        confirm_reserve_editor(player, data, element.parent)
     elseif action == 'reserve-import' then
         import_reserves(player, data)
         State.refresh(player)

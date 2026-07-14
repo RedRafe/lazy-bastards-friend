@@ -57,10 +57,12 @@ styles.lbf_open_button = {
     size = 32,
 }
 
+-- 308 = width the reserve editor row pushes the panel to (with the 28px elem
+-- button below), so opening the editor doesn't resize the frame.
 styles.lbf_relative_frame = {
     type = 'frame_style',
     parent = 'frame',
-    natural_width = 300,
+    natural_width = 308,
 }
 
 -- Advanced-options list nested under a behavior row.
@@ -70,16 +72,39 @@ styles.lbf_indented_flow = {
     vertical_spacing = 4,
 }
 
--- Reserve grid cells (one per reserved item).
-styles.lbf_reserve_sprite = {
-    type = 'image_style',
-    size = 28,
-    stretch_image_to_widget_size = true,
+-- Reserved-items slot grid: vanilla dark tiled-slots background, scrolls past 4 rows.
+styles.lbf_reserves_scroll_pane = {
+    type = 'scroll_pane_style',
+    parent = 'deep_slots_scroll_pane',
+    maximal_height = 160, -- 4 rows of 40px slots
 }
 
-styles.lbf_reserve_textfield = {
-    type = 'textbox_style',
-    width = 60,
+-- Import bar closing the reserved-items section, shaped like the map
+-- generator's "Map exchange string" subfooter. Negative margins cancel the
+-- section body's 8px padding so the bar runs flush to the section edges.
+styles.lbf_reserves_footer_frame = {
+    type = 'frame_style',
+    parent = 'subfooter_frame',
+    horizontally_stretchable = 'on',
+    left_margin = -8,
+    right_margin = -8,
+    bottom_margin = -8,
+}
+
+-- Item picker of the inline set-reserve editor; shrunk from the 40px slot
+-- default to match the 28px-tall slider/textfield row and save panel width.
+styles.lbf_reserve_elem_button = {
+    type = 'button_style',
+    parent = 'slot_button',
+    size = 28,
+}
+
+-- Amount slider of the inline set-reserve editor; narrowed so the whole
+-- [elem|amount|slider|confirm] row fits the panel's natural width.
+styles.lbf_reserve_slider = {
+    type = 'slider_style',
+    parent = 'notched_slider',
+    width = 120,
 }
 
 -- Test results panel (scripts/tests/lib/gui.lua) ------------------------------
