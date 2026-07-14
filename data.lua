@@ -1,3 +1,5 @@
+require('__lazy-bastards-friend__.prototypes.styles')
+
 data:extend({
     {
         type = 'custom-input',

@@ -137,25 +137,26 @@ function Gui.build(player)
         -- Compact form: a single blue icon button, nothing else — it just
         -- opens the panel. The master switch lives in the open panel (and the
         -- toolbar shortcut mirrors it).
-        set_style(player.gui.relative.add({
+        player.gui.relative.add({
             type = 'sprite-button',
             name = FRAME_NAME,
-            style = 'shortcut_bar_button_blue',
+            style = 'lbf_open_button',
             sprite = 'lbf-icon',
             tooltip = { 'lbf-gui.open-tooltip' },
             anchor = ANCHOR,
             tags = { lbf_action = 'toggle-panel' },
-        }), { size = 32 })
+        })
         data.gui_version = GUI_VERSION
         return
     end
 
-    local frame = set_style(player.gui.relative.add({
+    local frame = player.gui.relative.add({
         type = 'frame',
         name = FRAME_NAME,
+        style = 'lbf_relative_frame',
         direction = 'vertical',
         anchor = ANCHOR,
-    }), { natural_width = 300 })
+    })
     GuiUtil.add_titlebar(frame, {
         caption = { 'lbf-gui.title' },
         close_tags = { lbf_action = 'toggle-panel' },
@@ -163,10 +164,7 @@ function Gui.build(player)
     })
     local content = GuiUtil.add_content_frame(frame, 'inside_shallow_frame')
 
-    local master_flow = set_style(content.add({ type = 'flow', name = 'master-flow', direction = 'horizontal' }), {
-        padding = 8,
-        vertical_align = 'center',
-    })
+    local master_flow = set_style(content.add({ type = 'flow', name = 'master-flow', direction = 'horizontal', style = 'lbf_row_flow' }), { padding = 8 })
     add_master_switch(master_flow)
     GuiUtil.add_pusher(master_flow)
     -- Tagged for the admin dispatcher (scripts/gui/admin.lua), not ours.
@@ -181,7 +179,7 @@ function Gui.build(player)
 
     local behavior_body = add_section(content, 'behavior', { 'lbf-gui.behavior' })
     for _, group in pairs(BEHAVIOR_GROUPS) do
-        local row = set_style(behavior_body.add({ type = 'flow', name = group.id .. '-row', direction = 'horizontal' }), { vertical_align = 'center' })
+        local row = behavior_body.add({ type = 'flow', name = group.id .. '-row', direction = 'horizontal', style = 'lbf_row_flow' })
         add_channel_checkbox(row, group.channel)
         GuiUtil.add_pusher(row)
         row.add({
@@ -192,10 +190,7 @@ function Gui.build(player)
             tooltip = { 'lbf-gui.advanced-tooltip' },
             tags = { lbf_action = 'toggle-section', section = group.id },
         })
-        local advanced = set_style(behavior_body.add({ type = 'flow', name = group.id .. '-advanced', direction = 'vertical' }), {
-            left_padding = 16,
-            vertical_spacing = 4,
-        })
+        local advanced = behavior_body.add({ type = 'flow', name = group.id .. '-advanced', direction = 'vertical', style = 'lbf_indented_flow' })
         for _, entry in pairs(group.advanced) do
             if entry.flag then
                 add_flag_checkbox(advanced, entry.flag)
@@ -207,7 +202,7 @@ function Gui.build(player)
 
     local appearance_body = add_section(content, 'appearance', { 'lbf-gui.appearance' })
 
-    local radius_flow = set_style(appearance_body.add({ type = 'flow', name = 'radius-flow', direction = 'horizontal' }), { vertical_align = 'center' })
+    local radius_flow = appearance_body.add({ type = 'flow', name = 'radius-flow', direction = 'horizontal', style = 'lbf_row_flow' })
     radius_flow.add({ type = 'label', name = 'radius-label', caption = { 'lbf-gui.radius' }, tooltip = { 'lbf-gui.radius-tooltip' } })
     radius_flow.add({
         type = 'slider',
@@ -220,7 +215,7 @@ function Gui.build(player)
     })
     radius_flow.add({ type = 'label', name = 'lbf-radius-value', caption = '16' })
 
-    local shape_flow = set_style(appearance_body.add({ type = 'flow', name = 'shape-flow', direction = 'horizontal' }), { vertical_align = 'center' })
+    local shape_flow = appearance_body.add({ type = 'flow', name = 'shape-flow', direction = 'horizontal', style = 'lbf_row_flow' })
     shape_flow.add({ type = 'label', name = 'shape-label', caption = { 'lbf-gui.shape' } })
     shape_flow.add({
         type = 'drop-down',
@@ -230,7 +225,7 @@ function Gui.build(player)
         tags = { lbf_action = 'shape' },
     })
 
-    local fill_flow = set_style(appearance_body.add({ type = 'flow', name = 'fill-flow', direction = 'horizontal' }), { vertical_align = 'center' })
+    local fill_flow = appearance_body.add({ type = 'flow', name = 'fill-flow', direction = 'horizontal', style = 'lbf_row_flow' })
     fill_flow.add({
         type = 'checkbox',
         name = 'lbf-fill',
@@ -260,7 +255,7 @@ function Gui.build(player)
 
     local color_flow = appearance_body.add({ type = 'flow', name = 'color-flow', direction = 'vertical' })
     for _, component in pairs(COLOR_COMPONENTS) do
-        local row = set_style(color_flow.add({ type = 'flow', name = 'row-' .. component, direction = 'horizontal' }), { vertical_align = 'center' })
+        local row = color_flow.add({ type = 'flow', name = 'row-' .. component, direction = 'horizontal', style = 'lbf_row_flow' })
         row.add({ type = 'label', name = 'label', caption = { 'lbf-gui.color-' .. component } })
         row.add({
             type = 'slider',
@@ -297,7 +292,7 @@ function Gui.build(player)
 
     local reserves_body = add_section(content, 'reserves', { 'lbf-gui.reserves' }, { 'lbf-gui.reserves-tooltip' })
 
-    local reserves_header = set_style(reserves_body.add({ type = 'flow', name = 'reserves-header', direction = 'horizontal' }), { vertical_align = 'center' })
+    local reserves_header = reserves_body.add({ type = 'flow', name = 'reserves-header', direction = 'horizontal', style = 'lbf_row_flow' })
     GuiUtil.add_pusher(reserves_header)
     reserves_header.add({
         type = 'button',
@@ -309,7 +304,7 @@ function Gui.build(player)
 
     reserves_body.add({ type = 'table', name = 'lbf-reserves', column_count = 3 })
 
-    local add_flow = set_style(reserves_body.add({ type = 'flow', name = 'reserves-add-flow', direction = 'horizontal' }), { vertical_align = 'center' })
+    local add_flow = reserves_body.add({ type = 'flow', name = 'reserves-add-flow', direction = 'horizontal', style = 'lbf_row_flow' })
     add_flow.add({
         type = 'choose-elem-button',
         name = 'lbf-reserve-add',
@@ -368,21 +363,23 @@ local function sync_reserves(grid, reserves)
     end
     table.sort(names)
     for _, name in pairs(names) do
-        set_style(grid.add({
+        grid.add({
             type = 'sprite',
+            style = 'lbf_reserve_sprite',
             sprite = 'item/' .. name,
             tooltip = prototypes.item[name].localised_name,
             tags = { item = name },
-        }), { width = 28, height = 28, stretch_image_to_widget_size = true })
-        set_style(grid.add({
+        })
+        grid.add({
             type = 'textfield',
+            style = 'lbf_reserve_textfield',
             text = tostring(reserves[name]),
             numeric = true,
             allow_decimal = false,
             allow_negative = false,
             tooltip = { 'lbf-gui.reserve-count-tooltip' },
             tags = { lbf_action = 'reserve-count', item = name },
-        }), { width = 60 })
+        })
         grid.add({
             type = 'sprite-button',
             sprite = 'utility/trash',

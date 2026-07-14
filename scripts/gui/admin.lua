@@ -160,7 +160,7 @@ function Admin.open(player)
     local pane = set_style(content.add({ type = 'scroll-pane', name = 'lbf-players' }), { maximal_height = 320 })
     set_style(pane.add({ type = 'table', name = 'lbf-table', column_count = 1 + #State.channels }), { horizontal_spacing = 16 })
 
-    local bulk = set_style(content.add({ type = 'flow', name = 'lbf-bulk', direction = 'horizontal' }), { vertical_align = 'center' })
+    local bulk = content.add({ type = 'flow', name = 'lbf-bulk', direction = 'horizontal', style = 'lbf_row_flow' })
     bulk.add({
         type = 'drop-down',
         name = 'lbf-bulk-channel',

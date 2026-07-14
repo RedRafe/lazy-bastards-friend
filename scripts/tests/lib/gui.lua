@@ -42,8 +42,8 @@ end
 --- @return LuaGuiElement header flow, holding the title label and (once added by the caller) any trailing widgets
 local function add_section(frame, name, caption)
     local inner = frame.add({ type = 'frame', name = name, style = 'inside_shallow_frame', direction = 'vertical' })
-    local header = set_style(inner.add({ type = 'frame', name = 'lbf-header', style = 'subheader_frame' }), { horizontally_stretchable = true })
-    local header_flow = set_style(header.add({ type = 'flow', name = 'lbf-header-flow', direction = 'horizontal' }), { horizontally_stretchable = true })
+    local header = inner.add({ type = 'frame', name = 'lbf-header', style = 'lbf_subheader_frame' })
+    local header_flow = header.add({ type = 'flow', name = 'lbf-header-flow', direction = 'horizontal', style = 'lbf_subheader_flow' })
     header_flow.add({ type = 'label', caption = caption, style = 'subheader_caption_label' })
     return inner, header_flow
 end
@@ -56,13 +56,9 @@ end
 --- @param caption LocalisedString
 --- @return LuaGuiElement
 local function add_stat_tile(parent, name, color, caption)
-    local tile = set_style(parent.add({ type = 'frame', name = name, style = 'bordered_frame', direction = 'vertical' }), {
-        padding = 4,
-        horizontally_stretchable = true,
-        horizontal_align = 'center',
-    })
-    set_style(tile.add({ type = 'label', name = 'lbf-number', caption = '0' }), { font = 'default-large-bold', font_color = color })
-    set_style(tile.add({ type = 'label', name = 'lbf-label', caption = caption }), { font_color = { 170, 170, 170 } })
+    local tile = parent.add({ type = 'frame', name = name, style = 'lbf_stat_tile_frame', direction = 'vertical' })
+    set_style(tile.add({ type = 'label', name = 'lbf-number', caption = '0', style = 'lbf_large_bold_label' }), { font_color = color })
+    tile.add({ type = 'label', name = 'lbf-label', caption = caption, style = 'lbf_muted_label' })
     return tile
 end
 
@@ -103,13 +99,9 @@ local function ensure_frame(player)
         vertical_spacing = 4,
     })
 
-    local final = set_style(canvas.add({ type = 'frame', name = 'lbf-final-frame', style = 'neutral_message_frame', direction = 'vertical' }), {
-        horizontally_stretchable = true,
-        horizontal_align = 'center',
-        padding = 8,
-    })
+    local final = canvas.add({ type = 'frame', name = 'lbf-final-frame', style = 'lbf_neutral_message_frame', direction = 'vertical' })
     final.visible = false
-    set_style(final.add({ type = 'label', name = 'lbf-final-title' }), { font = 'default-large-bold' })
+    final.add({ type = 'label', name = 'lbf-final-title', style = 'lbf_large_bold_label' })
     final.add({ type = 'label', name = 'lbf-final-counts' })
 
     return frame
@@ -126,7 +118,7 @@ local function rebuild(frame)
     instructions.visible = header ~= nil and #header.lines > 0
     if header then
         for _, line in pairs(header.lines) do
-            set_style(lines_flow.add({ type = 'label', caption = line }), { single_line = false, maximal_width = 380 })
+            lines_flow.add({ type = 'label', caption = line, style = 'lbf_instruction_label' })
         end
     end
 
@@ -152,10 +144,7 @@ local function rebuild(frame)
     local grid = checks['lbf-pane']['lbf-rows']
     grid.clear()
     for index, row in pairs(rows) do
-        set_style(grid.add({ type = 'label', caption = index .. '. ' .. row.name }), {
-            single_line = false,
-            maximal_width = 280,
-        })
+        grid.add({ type = 'label', caption = index .. '. ' .. row.name, style = 'lbf_check_label' })
         local status_label = grid.add({ type = 'label', caption = status_caption(row.status) })
         if row.extra then
             status_label.tooltip = row.extra
@@ -165,8 +154,7 @@ local function rebuild(frame)
     local final_frame = canvas['lbf-final-frame']
     if finished then
         final_frame.visible = true
-        set_style(final_frame, finished.failed == 0 and 'positive_message_frame' or 'negative_message_frame')
-        set_style(final_frame, { horizontally_stretchable = true, horizontal_align = 'center', padding = 8 })
+        final_frame.style = finished.failed == 0 and 'lbf_positive_message_frame' or 'lbf_negative_message_frame'
         final_frame['lbf-final-title'].caption = finished.failed == 0
             and { 'lbf-gui.final-title-passed' }
             or { 'lbf-gui.final-title-failed' }

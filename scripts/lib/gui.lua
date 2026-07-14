@@ -1,6 +1,8 @@
 --- Small, commonly reused GUI building blocks shared by scripts/gui/ and
 --- scripts/tests/lib/gui.lua. Kept dependency-free (no State/storage access)
---- so it can be required from any stage-appropriate module.
+--- so it can be required from any stage-appropriate module. Recurring looks
+--- are lbf_* style prototypes (prototypes/styles.lua); set_style is for the
+--- leftover one-off/dynamic tweaks.
 
 local Gui = {}
 
@@ -45,10 +47,7 @@ function Gui.add_titlebar(frame, options)
         Gui.add_pusher(titlebar)
     else
         titlebar.drag_target = frame
-        Gui.set_style(titlebar.add({ type = 'empty-widget', style = 'draggable_space_header', ignored_by_interaction = true }), {
-            horizontally_stretchable = true,
-            height = 24,
-        })
+        titlebar.add({ type = 'empty-widget', style = 'lbf_drag_handle', ignored_by_interaction = true })
     end
     if options.close_tags then
         titlebar.add({
@@ -78,7 +77,7 @@ end
 --- @param element LuaGuiElement
 --- @return LuaGuiElement
 function Gui.add_pusher(element)
-    return Gui.set_style(element.add({ type = 'empty-widget' }), { horizontally_stretchable = true })
+    return element.add({ type = 'empty-widget', style = 'lbf_pusher' })
 end
 
 --- Adds a collapsible section: a `subheader_frame` header (caption + an
@@ -95,11 +94,8 @@ end
 --- @return LuaGuiElement body the vertical flow for section content
 function Gui.add_collapsible(parent, id, caption, tags, tooltip)
     local outer = parent.add({ type = 'frame', name = 'lbf-section-' .. id, style = 'inside_shallow_frame', direction = 'vertical' })
-    local header = Gui.set_style(outer.add({ type = 'frame', name = 'header', style = 'subheader_frame' }), { horizontally_stretchable = true })
-    local header_flow = Gui.set_style(header.add({ type = 'flow', name = 'header-flow', direction = 'horizontal' }), {
-        vertical_align = 'center',
-        horizontally_stretchable = true,
-    })
+    local header = outer.add({ type = 'frame', name = 'header', style = 'lbf_subheader_frame' })
+    local header_flow = header.add({ type = 'flow', name = 'header-flow', direction = 'horizontal', style = 'lbf_subheader_flow' })
     header_flow.add({ type = 'label', name = 'label', caption = caption, tooltip = tooltip, style = 'subheader_caption_label' })
     Gui.add_pusher(header_flow)
     header_flow.add({
@@ -109,10 +105,7 @@ function Gui.add_collapsible(parent, id, caption, tags, tooltip)
         sprite = 'utility/collapse',
         tags = tags,
     })
-    local body = Gui.set_style(outer.add({ type = 'flow', name = 'body', direction = 'vertical' }), {
-        padding = 8,
-        vertical_spacing = 4,
-    })
+    local body = outer.add({ type = 'flow', name = 'body', direction = 'vertical', style = 'lbf_section_body_flow' })
     return outer, body
 end
 
