@@ -38,6 +38,9 @@ end
 --- Idempotent storage setup, safe for on_init and on_configuration_changed.
 function State.init()
     storage.version = 1
+    if storage.master == nil then
+        storage.master = true -- global whole-mod switch (admin GUI "Everyone" row)
+    end
     storage.active = storage.active or { collect = true, feed = true, combat = true }
     storage.auto_disabled = storage.auto_disabled or false
     storage.spm_strikes = storage.spm_strikes or 0
@@ -67,6 +70,9 @@ function State.init()
         if data.master == nil then
             data.master = true
         end
+        if data.locked_master == nil then
+            data.locked_master = false
+        end
         data.show_area = nil -- superseded by fill (fill=false now hides the area entirely)
         data.ui = data.ui or State.default_ui()
         for id, default in pairs(State.default_ui().sections) do
@@ -84,6 +90,7 @@ end
 
 --- @class LbfPlayerData
 --- @field master boolean per-player master switch: false turns the whole mod off for this player, preserving per-channel prefs
+--- @field locked_master boolean admin per-player master lock: true turns the whole mod off for this player regardless of their prefs
 --- @field enabled table<LbfChannel, boolean>
 --- @field locked table<LbfChannel, boolean>
 --- @field radius uint
@@ -128,6 +135,7 @@ function State.get_player_data(player_index)
     if not data then
         data = {
             master = true,
+            locked_master = false,
             enabled = { collect = true, feed = true, combat = true },
             locked = { collect = false, feed = false, combat = false },
             radius = 16,
@@ -299,7 +307,12 @@ end
 --- @return boolean
 function State.effective(player_index, channel)
     local data = State.get_player_data(player_index)
-    return storage.active[channel] and not data.locked[channel] and data.master and data.enabled[channel]
+    return storage.master
+        and storage.active[channel]
+        and not data.locked_master
+        and not data.locked[channel]
+        and data.master
+        and data.enabled[channel]
 end
 
 --- @param player_index uint
@@ -315,6 +328,9 @@ end
 
 --- @return boolean
 function State.any_master()
+    if not storage.master then
+        return false
+    end
     for _, channel in pairs(State.channels) do
         if storage.active[channel] then
             return true
@@ -323,25 +339,29 @@ function State.any_master()
     return false
 end
 
+--- Global whole-mod switch — the admin GUI's "Everyone" On/Off. Preserves the
+--- channel masters and every per-player setting; does not touch the watchdog.
+--- @param value boolean
+function State.set_global_master(value)
+    storage.master = value
+end
+
+--- Global masters no longer touch the watchdog: re-enabling a channel for
+--- everyone must not re-arm a tripped watchdog (it would just retire again).
+--- Re-arming is the watchdog switch's job — Watchdog.set_enabled (§2.1).
 --- @param channel LbfChannel
 --- @param value boolean
 function State.set_master(channel, value)
     storage.active[channel] = value
-    -- Re-enabling any retired master re-arms the SPM watchdog (DESIGN.md §2.1).
-    if value then
-        storage.auto_disabled = false
-        storage.spm_strikes = 0
-    end
 end
 
+--- "All masters" = the global switch plus every channel master (the
+--- singleplayer revive path in set_player_master).
 --- @param value boolean
 function State.set_all_masters(value)
+    storage.master = value
     for _, channel in pairs(State.channels) do
         storage.active[channel] = value
-    end
-    if value then
-        storage.auto_disabled = false
-        storage.spm_strikes = 0
     end
 end
 
@@ -373,6 +393,14 @@ end
 --- @param locked boolean
 function State.set_locked(player_index, channel, locked)
     State.get_player_data(player_index).locked[channel] = locked
+end
+
+--- Admin per-player master lock: the whole mod is off for that player no
+--- matter what they choose, preserving all their prefs (§2).
+--- @param player_index uint
+--- @param locked boolean
+function State.set_locked_master(player_index, locked)
+    State.get_player_data(player_index).locked_master = locked
 end
 
 --- @param radius number

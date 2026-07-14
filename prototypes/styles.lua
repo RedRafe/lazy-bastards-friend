@@ -114,6 +114,23 @@ styles.lbf_reserve_slider = {
     width = 120,
 }
 
+-- Admin panel (scripts/gui/admin.lua) ----------------------------------------
+
+-- Player roster: vanilla /admin row striping, name column left-aligned,
+-- every control column centered.
+styles.lbf_players_table = {
+    type = 'table_style',
+    parent = 'table_with_selection',
+    horizontally_stretchable = 'on',
+    column_alignments = {
+        { column = 1, alignment = 'middle-left' }, -- name
+        { column = 2, alignment = 'middle-center' }, -- on/off switch
+        { column = 3, alignment = 'middle-center' }, -- collect lock
+        { column = 4, alignment = 'middle-center' }, -- feed lock
+        { column = 5, alignment = 'middle-center' }, -- combat lock
+    },
+}
+
 -- Test results panel (scripts/tests/lib/gui.lua) ------------------------------
 
 -- Pending/Passed/Failed count tile (number color stays runtime — per tile).

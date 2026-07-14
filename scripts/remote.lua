@@ -53,7 +53,17 @@ local function check_flag(flag)
 end
 
 remote.add_interface('lazy-bastards-friend', {
-    --- Global master switch for one channel. Enabling re-arms the SPM watchdog.
+    --- The global whole-mod switch (the admin GUI's "Everyone" On/Off).
+    --- Preserves channel masters and per-player settings; does not touch the
+    --- SPM watchdog.
+    --- @param value boolean
+    set_global_master = function(value)
+        State.set_global_master(value == true)
+        State.refresh_all()
+    end,
+
+    --- Global master switch for one channel. Does not touch the SPM watchdog —
+    --- re-arming after a trip goes through set_watchdog_enabled(true).
     --- @param channel LbfChannel
     --- @param value boolean
     set_active = function(channel, value)
@@ -75,6 +85,17 @@ remote.add_interface('lazy-bastards-friend', {
     lock_player = function(player_index, channel, locked)
         local player = check_player(player_index)
         State.set_locked(player.index, check_channel(channel), locked == true)
+        State.refresh(player)
+    end,
+
+    --- Admin master lock: while locked the whole mod is off for that player,
+    --- every channel, regardless of their own preferences (which are kept).
+    --- The "On/Off" column of the admin GUI's player list.
+    --- @param player_index uint
+    --- @param locked boolean
+    lock_player_master = function(player_index, locked)
+        local player = check_player(player_index)
+        State.set_locked_master(player.index, locked == true)
         State.refresh(player)
     end,
 
@@ -108,6 +129,7 @@ remote.add_interface('lazy-bastards-friend', {
         return {
             enabled = copy_channels(data.enabled),
             locked = copy_channels(data.locked),
+            locked_master = data.locked_master == true,
             effective = effective,
             radius = State.get_radius(player.index),
             shape = data.shape,
@@ -143,6 +165,7 @@ remote.add_interface('lazy-bastards-friend', {
     --- @return table see docs/API.md
     get_state = function()
         return {
+            master = storage.master ~= false,
             active = copy_channels(storage.active),
             auto_disabled = storage.auto_disabled == true,
             watchdog = Watchdog.status(),
@@ -159,6 +182,14 @@ remote.add_interface('lazy-bastards-friend', {
             error('lazy-bastards-friend: threshold must be a non-negative number')
         end
         settings.global['lbf-spm-threshold'] = { value = value }
+    end,
+
+    --- The watchdog on/off switch (also the lbf-watchdog-enabled map setting).
+    --- Turning it on un-trips and re-arms after an auto-retirement — the only
+    --- re-arm path; set_active(..., true) alone leaves the watchdog tripped.
+    --- @param value boolean
+    set_watchdog_enabled = function(value)
+        Watchdog.set_enabled(value == true)
     end,
 
     --- Current science-per-minute reading for a force (what the watchdog sees).

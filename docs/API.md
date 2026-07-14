@@ -21,21 +21,36 @@ arguments raise a Lua error with a `lazy-bastards-friend:` prefix — wrap in
     opt-in, drain their trash slots into chests).
   - `'combat'` — keep turrets topped up with ammo.
 - **Tri-state activation** — a channel actually runs for a player only if all
-  three are true: the global master is on (`set_active`), the player is not
-  admin-locked (`lock_player`), and the player's own toggle is on
+  of these are true: the global whole-mod switch is on (`set_global_master`),
+  the channel's global master is on (`set_active`), the player is not
+  admin-locked — neither for the whole mod (`lock_player_master`) nor for that
+  channel (`lock_player`) — and the player's own toggle is on
   (`set_player_enabled`). The combined result is reported as `effective` in
   `get_player_state`.
 - **Watchdog** — the mod retires Collect+Feed automatically once a force's
   science consumption passes the `lbf-spm-threshold` map setting. Re-enabling
-  any master through `set_active(..., true)` re-arms it.
+  masters through `set_active(..., true)` does **not** re-arm it — only
+  `set_watchdog_enabled(true)` (or the switch in the admin GUI's Watchdog tab)
+  does.
 
 ## Functions
 
+### `set_global_master(value)`
+
+The global whole-mod switch — the "Everyone" On/Off in the admin GUI's Players
+tab. Turning it off stops the mod for every player; turning it back on restores
+exactly what was configured before (channel masters, locks, and player
+preferences are all preserved). Does *not* re-arm a tripped SPM watchdog.
+
+```lua
+remote.call('lazy-bastards-friend', 'set_global_master', false)
+```
+
 ### `set_active(channel, value)`
 
-Set a global master switch. Turning a master **on** also clears the
-auto-retired state and re-arms the SPM watchdog. Turning it on does *not*
-override per-player toggles or admin locks.
+Set a global master switch. Turning a master on does *not* override per-player
+toggles or admin locks, and does *not* re-arm a tripped SPM watchdog (use
+`set_watchdog_enabled(true)` for that).
 
 | arg | type | |
 |---|---|---|
@@ -73,6 +88,22 @@ remote.call('lazy-bastards-friend', 'lock_player', 7, 'collect', true)
 remote.call('lazy-bastards-friend', 'lock_player', 7, 'feed', true)
 ```
 
+### `lock_player_master(player_index, locked)`
+
+Admin master lock: while locked, the **whole mod** is off for that player —
+every channel, regardless of their own preferences (which are kept and apply
+again once unlocked). This is the "On/Off" column in the admin GUI's player
+list.
+
+| arg | type | |
+|---|---|---|
+| `player_index` | `uint` | must be an existing player |
+| `locked` | `boolean` | `true` = mod fully off for them, `false` = allow |
+
+```lua
+remote.call('lazy-bastards-friend', 'lock_player_master', 7, true)
+```
+
 ### `set_player_enabled(player_index, channel, enabled)`
 
 Set the player's *own* preference toggle, exactly as if they clicked it.
@@ -91,6 +122,7 @@ Full per-player state:
 {
   enabled   = { collect = true,  feed = true,  combat = true },  -- own toggles
   locked    = { collect = false, feed = false, combat = false }, -- admin locks
+  locked_master = false,   -- admin whole-mod lock (lock_player_master)
   effective = { collect = true,  feed = true,  combat = true },  -- what actually runs
   radius    = 16,          -- service radius, tiles (already clamped)
   shape     = 'circle',    -- 'circle' | 'square'
@@ -153,6 +185,7 @@ Global mod state:
 
 ```lua
 {
+  master        = true,       -- global whole-mod switch (set_global_master)
   active        = { collect = true, feed = true, combat = true }, -- masters
   auto_disabled = false,      -- true after the SPM watchdog tripped
   watchdog      = 'armed',    -- 'armed' | 'tripped' | 'disabled' | 'idle'
@@ -174,6 +207,18 @@ strike debounce.
 
 ```lua
 remote.call('lazy-bastards-friend', 'set_spm_threshold', 90)
+```
+
+### `set_watchdog_enabled(value)`
+
+The watchdog's on/off switch (mirrors the `lbf-watchdog-enabled` map setting
+and the switch in the admin GUI's Watchdog tab). Turning it **on** also clears
+the auto-retired state and re-arms — the only re-arm path after a trip;
+`set_active(..., true)` alone leaves the watchdog tripped.
+
+```lua
+-- Re-arm after an auto-retirement:
+remote.call('lazy-bastards-friend', 'set_watchdog_enabled', true)
 ```
 
 ### `get_spm(force)` → `double`

@@ -17,6 +17,15 @@ end
 
 --- @param player LuaPlayer
 function Shortcut.toggle(player)
+    -- Mirrors the greyed-out master switch: an admin-disabled player can't
+    -- flip themselves back on from the toolbar either.
+    if State.get_player_data(player.index).locked_master then
+        player.create_local_flying_text({
+            text = { 'lbf-gui.locked-by-admin' },
+            create_at_cursor = true,
+        })
+        return
+    end
     State.set_player_master(player, not State.get_player_data(player.index).master)
     State.refresh(player)
 end

@@ -53,7 +53,7 @@ end)
 Bench.on_player_created(KIT, 'L09 watchdog & admin', {
     'Threshold is lowered to ' .. SPM_THRESHOLD .. ' SPM and the level runs at 10x game speed — standing near the labs feeds them packs and should trip the watchdog (Collect+Feed off) within a few seconds.',
     'Turn off "Feed ingredients" first if you want to poke around before it retires itself.',
-    'Open /lbf-admin: re-enable the masters after retirement, try per-player per-channel locks, and check the SPM readout matches get_spm from docs/API.md.',
+    'Open /lbf-admin: on the Players tab re-enable the masters after retirement (the watchdog stays tripped — its switch on the Watchdog tab is the only re-arm), try the search bar, the per-player On/Off and per-channel locks, and check the SPM readout on the Watchdog tab matches get_spm from docs/API.md.',
 })
 
 Event.add(defines.events.on_player_created, function(event)

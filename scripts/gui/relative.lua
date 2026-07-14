@@ -535,10 +535,10 @@ end
 --- @param channel LbfChannel
 local function sync_channel_checkbox(checkbox, data, channel)
     checkbox.state = data.enabled[channel]
-    if not storage.active[channel] then
+    if not (storage.master and storage.active[channel]) then
         checkbox.enabled = false
         checkbox.tooltip = { 'lbf-gui.master-off' }
-    elseif data.locked[channel] then
+    elseif data.locked_master or data.locked[channel] then
         checkbox.enabled = false
         checkbox.tooltip = { 'lbf-gui.locked-by-admin' }
     else
@@ -573,7 +573,10 @@ function Gui.sync(player)
     end
     local flags = data.flags
 
-    content['master-flow']['lbf-master'].switch_state = data.master and 'right' or 'left'
+    local master_switch = content['master-flow']['lbf-master']
+    master_switch.switch_state = data.master and 'right' or 'left'
+    master_switch.enabled = not data.locked_master
+    master_switch.tooltip = data.locked_master and { 'lbf-gui.locked-by-admin' } or { 'lbf-gui.master-switch-tooltip' }
 
     for _, id in pairs(TOP_SECTIONS) do
         local section = section_frame(content, id)

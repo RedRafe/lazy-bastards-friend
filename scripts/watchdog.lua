@@ -107,13 +107,35 @@ function Watchdog.apply()
     end
 end
 
+--- The admin on/off switch (admin GUI Watchdog tab, remote API). Switching ON
+--- also un-trips and re-arms after an auto-retirement — the only re-arm path,
+--- since re-enabling the channel masters deliberately does not (§2.1).
+--- Notifies check listeners so open admin GUIs repaint immediately.
+--- @param value boolean
+function Watchdog.set_enabled(value)
+    if value then
+        storage.auto_disabled = false
+    end
+    storage.spm_strikes = 0
+    if settings.global['lbf-watchdog-enabled'].value ~= value then
+        -- Fires on_runtime_mod_setting_changed, whose handler rebuilds too.
+        settings.global['lbf-watchdog-enabled'] = { value = value }
+    end
+    Watchdog.rebuild()
+    for _, listener in pairs(check_listeners) do
+        listener()
+    end
+end
+
 --- Recompute whether the watchdog should run, persist it, re-register.
 --- Call from events only (writes storage) — never from on_load.
 function Watchdog.rebuild()
     local active = storage.active
-    local stops_anything = active.collect
-        or active.feed
-        or (settings.global['lbf-watchdog-stops-combat'].value == true and active.combat)
+    -- Nothing to retire while the global switch is off (§4.3 "Everyone" row).
+    local stops_anything = storage.master
+        and (active.collect
+            or active.feed
+            or (settings.global['lbf-watchdog-stops-combat'].value == true and active.combat))
     storage.watchdog_armed = (
         settings.global['lbf-watchdog-enabled'].value == true
         and not storage.auto_disabled
