@@ -49,15 +49,36 @@ local function update_tab_description(frame)
     frame.shell['lbf-tab-desc'].caption = { 'lbf-gui.tab-desc-' .. content.name }
 end
 
---- @param player LuaPlayer
---- @return LocalisedString
-local function status_caption(player)
-    local spm = string.format('%.1f', Watchdog.spm(player.force))
-    local threshold = settings.global['lbf-spm-threshold'].value
-    return { 'lbf-gui.admin-status', spm, tostring(threshold), { 'lbf-gui.watchdog-' .. Watchdog.status() } }
-end
+-- Status label font color, keyed on Watchdog.status(): green while armed and
+-- watching, red once tripped (auto-retired), grey when turned off by
+-- setting, yellow while idle (nothing left to retire).
+local STATUS_COLORS = {
+    armed = { r = 0.3, g = 0.9, b = 0.3 },
+    tripped = { r = 1, g = 0.3, b = 0.3 },
+    disabled = { r = 0.6, g = 0.6, b = 0.6 },
+    idle = { r = 1, g = 0.8, b = 0.2 },
+}
 
 -- == Watchdog tab =============================================================
+
+--- @param parent LuaGuiElement
+--- @return LuaGuiElement row
+local function add_setting_row(parent, name, caption, tooltip)
+    local row = parent.add({ type = 'flow', name = name, direction = 'horizontal', style = 'lbf_row_flow' })
+    row.add({ type = 'label', caption = caption, tooltip = tooltip })
+    GuiUtil.add_pusher(row)
+    return row
+end
+
+--- @param parent LuaGuiElement
+--- @return LuaGuiElement row
+local function add_stat_row(parent, name, caption, tooltip, value_name)
+    local row = parent.add({ type = 'flow', name = name, direction = 'horizontal', style = 'lbf_row_flow' })
+    row.add({ type = 'label', caption = caption, tooltip = tooltip})
+    GuiUtil.add_pusher(row)
+    row.add({ type = 'label', name = value_name, tooltip = tooltip })
+    return row
+end
 
 --- @param tabs LuaGuiElement
 local function build_watchdog_tab(tabs)
@@ -68,15 +89,18 @@ local function build_watchdog_tab(tabs)
         { padding = 12, vertical_spacing = 8 }
     )
 
-    local switch_row = page.add({ type = 'flow', name = 'switch-row', direction = 'horizontal', style = 'lbf_row_flow' })
-    switch_row.add({
-        type = 'label',
-        caption = { 'lbf-gui.watchdog-switch' },
-        tooltip = { 'lbf-gui.watchdog-switch-tooltip' },
-        style = 'caption_label',
+    local settings_frame = page.add({
+        type = 'frame',
+        name = 'lbf-settings',
+        style = 'bordered_frame',
+        caption = { 'lbf-gui.watchdog-settings-frame' },
+        direction = 'vertical',
     })
-    GuiUtil.add_pusher(switch_row)
-    switch_row.add({
+
+    local enabled_row = add_setting_row(
+        settings_frame, 'enabled-row', { 'lbf-gui.watchdog-enabled' }, { 'lbf-gui.watchdog-switch-tooltip' }
+    )
+    enabled_row.add({
         type = 'switch',
         name = 'lbf-watchdog-switch',
         switch_state = 'right',
@@ -86,13 +110,9 @@ local function build_watchdog_tab(tabs)
         tags = { lbf_admin_action = 'watchdog-switch' },
     })
 
-    local threshold_row = page.add({ type = 'flow', name = 'threshold-row', direction = 'horizontal', style = 'lbf_row_flow' })
-    threshold_row.add({
-        type = 'label',
-        caption = { 'lbf-gui.threshold' },
-        tooltip = { 'lbf-gui.threshold-tooltip' },
-    })
-    GuiUtil.add_pusher(threshold_row)
+    local threshold_row = add_setting_row(
+        settings_frame, 'threshold-row', { 'lbf-gui.threshold' }, { 'lbf-gui.threshold-tooltip' }
+    )
     set_style(threshold_row.add({
         type = 'textfield',
         name = 'lbf-threshold',
@@ -103,18 +123,28 @@ local function build_watchdog_tab(tabs)
         tags = { lbf_admin_action = 'threshold' },
     }), { width = 70 })
 
-    page.add({
+    local combat_row = add_setting_row(
+        settings_frame, 'combat-row', { 'lbf-gui.watchdog-combat' }, { 'lbf-gui.watchdog-combat-tooltip' }
+    )
+    combat_row.add({
         type = 'checkbox',
         name = 'lbf-watchdog-combat',
         state = false,
-        caption = { 'lbf-gui.watchdog-combat' },
         tooltip = { 'lbf-gui.watchdog-combat-tooltip' },
         tags = { lbf_admin_action = 'watchdog-combat' },
     })
 
-    page.add({ type = 'line' })
-    page.add({ type = 'label', name = 'lbf-status' })
-    page.add({ type = 'label', name = 'lbf-moved', tooltip = { 'lbf-gui.items-moved-tooltip' } })
+    local stats_frame = page.add({
+        type = 'frame',
+        name = 'lbf-stats',
+        style = 'bordered_frame',
+        caption = { 'lbf-gui.watchdog-stats-frame' },
+        direction = 'vertical',
+    })
+
+    add_stat_row(stats_frame, 'status-row', { 'lbf-gui.watchdog-status' }, nil, 'lbf-status')
+    add_stat_row(stats_frame, 'spm-row', { 'lbf-gui.watchdog-spm' }, nil, 'lbf-spm')
+    add_stat_row(stats_frame, 'activity-row', { 'lbf-gui.watchdog-activity' }, { 'lbf-gui.items-moved-tooltip' }, 'lbf-moved')
 end
 
 -- == Players tab ==============================================================
@@ -269,20 +299,30 @@ function Admin.sync(player)
         return
     end
     local watchdog = get_tabs(frame).watchdog
+    local settings_group = watchdog['lbf-settings']
     -- The switch shows "will the watchdog act": enabled and not tripped.
     -- Off while tripped, so flipping it back to On is the re-arm gesture.
     local armed = settings.global['lbf-watchdog-enabled'].value == true and not storage.auto_disabled
-    watchdog['switch-row']['lbf-watchdog-switch'].switch_state = armed and 'right' or 'left'
+    settings_group['enabled-row']['lbf-watchdog-switch'].switch_state = armed and 'right' or 'left'
     local threshold = settings.global['lbf-spm-threshold'].value --[[@as double]]
-    local field = watchdog['threshold-row']['lbf-threshold']
+    local field = settings_group['threshold-row']['lbf-threshold']
     -- Only overwrite when the value actually differs, so the ~10 s live
     -- refresh doesn't clobber a threshold the admin is mid-typing.
     if tonumber(field.text) ~= threshold then
         field.text = string.format('%g', threshold)
     end
-    watchdog['lbf-watchdog-combat'].state = settings.global['lbf-watchdog-stops-combat'].value == true
-    watchdog['lbf-status'].caption = status_caption(player)
-    watchdog['lbf-moved'].caption = { 'lbf-gui.items-moved', tostring(storage.items_moved or 0) }
+    local combat_stops = settings.global['lbf-watchdog-stops-combat'].value == true
+    settings_group['combat-row']['lbf-watchdog-combat'].state = combat_stops
+
+    local stats_group = watchdog['lbf-stats']
+    local status = Watchdog.status()
+    local status_label = stats_group['status-row']['lbf-status']
+    status_label.caption = { 'lbf-gui.watchdog-' .. status }
+    set_style(status_label, { font_color = STATUS_COLORS[status] })
+    local spm = Watchdog.spm(player.force)
+    stats_group['spm-row']['lbf-spm'].caption = string.format('%.1f [img=item.science]/min', spm)
+    local moved = storage.items_moved or 0
+    stats_group['activity-row']['lbf-moved'].caption = string.format('%d [img=item.lbf-items-moved]', moved)
 
     local globals = get_tabs(frame).players['lbf-globals'].row
     globals['lbf-global-master'].switch_state = storage.master and 'right' or 'left'

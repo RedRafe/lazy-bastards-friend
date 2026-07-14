@@ -30,9 +30,10 @@ end
 --- frames anchored in `player.gui.relative`/`.top` etc — `drag_target` is only
 --- valid on frames living in `player.gui.screen` and errors otherwise.
 --- @param frame LuaGuiElement frame the titlebar belongs to (and drags, unless draggable = false)
---- @param options { name: string?, label_name: string?, caption: LocalisedString?, close_tags: table?, draggable: boolean? }?
+--- @param options { name: string?, label_name: string?, caption: LocalisedString?, close_tags: table?, close_tooltip: LocalisedString? draggable: boolean? }?
 --- @return LuaGuiElement titlebar
 --- @return LuaGuiElement label
+--- @return LuaGuiElement? close_button
 function Gui.add_titlebar(frame, options)
     options = options or {}
     local titlebar = frame.add({ type = 'flow', name = options.name or 'titlebar', direction = 'horizontal' })
@@ -49,12 +50,13 @@ function Gui.add_titlebar(frame, options)
         titlebar.drag_target = frame
         titlebar.add({ type = 'empty-widget', style = 'lbf_drag_handle', ignored_by_interaction = true })
     end
-    if options.close_tags then
+    if options.close_tags or options.close_tooltip then
         titlebar.add({
             type = 'sprite-button',
             style = 'frame_action_button',
             sprite = 'utility/close',
             tags = options.close_tags,
+            tooltip = options.close_tooltip,
         })
     end
     return titlebar, label

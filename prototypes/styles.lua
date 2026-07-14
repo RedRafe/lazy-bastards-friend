@@ -39,7 +39,7 @@ styles.lbf_subheader_flow = {
 styles.lbf_section_body_flow = {
     type = 'vertical_flow_style',
     padding = 8,
-    vertical_spacing = 4,
+    vertical_spacing = 6,
 }
 
 -- Label + control on one line, vertically centered — the workhorse row flow.

@@ -165,6 +165,7 @@ function Gui.build(player)
     GuiUtil.add_titlebar(frame, {
         caption = { 'lbf-gui.title' },
         close_tags = { lbf_action = 'toggle-panel' },
+        close_tooltip = { 'lbf-gui.close-tooltip' },
         draggable = false,
     })
     local content = GuiUtil.add_content_frame(frame, 'inside_shallow_frame')
