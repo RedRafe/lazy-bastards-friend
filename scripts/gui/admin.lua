@@ -450,91 +450,120 @@ end
 
 --- One dispatcher for every admin element, keyed on tags.lbf_admin_action
 --- (the open button lives in the relative panel but is tagged for us too).
+--- GuiUtil.new_dispatcher asserts each action is only registered once, so a
+--- copy-pasted `on_action` can't silently shadow an earlier handler.
+local on_action, dispatch_action = GuiUtil.new_dispatcher('lbf_admin_action')
+
+--- Re-checks player.admin before running a handler — a GUI can go stale
+--- between demotion and the close we do on on_player_demoted.
+--- @param handler fun(event: table, element: LuaGuiElement, tags: table, player: LuaPlayer)
+--- @return fun(event: table, element: LuaGuiElement, tags: table, player: LuaPlayer)
+local function admin_only(handler)
+    return function(event, element, tags, player)
+        if not player.admin then
+            Admin.close(player) -- stale frame after demotion
+            return
+        end
+        handler(event, element, tags, player)
+    end
+end
+
+on_action('toggle', function(_, _, _, player)
+    Admin.toggle(player)
+end)
+
+on_action('close', function(_, _, _, player)
+    Admin.close(player)
+end)
+
+on_action('global-master', admin_only(function(_, element)
+    State.set_global_master(element.switch_state == 'right')
+    State.refresh_all()
+    Admin.refresh_all()
+end))
+
+on_action('master', admin_only(function(_, element, tags)
+    State.set_master(tags.channel --[[@as LbfChannel]], element.state)
+    State.refresh_all()
+    Admin.refresh_all()
+end))
+
+on_action('lock', admin_only(function(_, element, tags)
+    State.set_locked(tags.player_index --[[@as uint]], tags.channel --[[@as LbfChannel]], not element.state)
+    local target = game.get_player(tags.player_index --[[@as uint]])
+    if target then
+        State.refresh(target)
+    end
+    Admin.refresh_all()
+end))
+
+on_action('lock-master', admin_only(function(_, element, tags)
+    State.set_locked_master(tags.player_index --[[@as uint]], element.switch_state == 'left')
+    local target = game.get_player(tags.player_index --[[@as uint]])
+    if target then
+        State.refresh(target)
+    end
+    Admin.refresh_all()
+end))
+
+on_action('watchdog-switch', admin_only(function(_, element)
+    -- set_enabled notifies the check listeners, which refresh all admin GUIs.
+    Watchdog.set_enabled(element.switch_state == 'right')
+end))
+
+on_action('threshold', admin_only(function(event, element, _, player)
+    if event.name ~= defines.events.on_gui_confirmed then
+        return
+    end
+    local value = tonumber(element.text)
+    if value and value >= 0 then
+        settings.global['lbf-spm-threshold'] = { value = value }
+    else
+        Admin.sync(player) -- restore the last good value
+    end
+end))
+
+on_action('tab', admin_only(function(_, _, _, player)
+    local frame = get_frame(player)
+    if frame then
+        update_tab_description(frame)
+    end
+end))
+
+--- @param player LuaPlayer
+local function rebuild_if_open(player)
+    local frame = get_frame(player)
+    if frame then
+        rebuild_rows(frame)
+    end
+end
+
+on_action('search', admin_only(function(_, _, _, player)
+    rebuild_if_open(player)
+end))
+
+on_action('scope', admin_only(function(_, _, _, player)
+    rebuild_if_open(player)
+end))
+
+on_action('search-toggle', admin_only(function(_, element, _, player)
+    local frame = get_frame(player)
+    if not frame then
+        return
+    end
+    local field = frame.titlebar['lbf-search']
+    field.visible = element.toggled
+    if element.toggled then
+        field.focus()
+    elseif field.text ~= '' then
+        field.text = '' -- closing the search clears the filter
+        rebuild_rows(frame)
+    end
+end))
+
 --- @param event EventData.on_gui_click|EventData.on_gui_checked_state_changed|EventData.on_gui_switch_state_changed|EventData.on_gui_text_changed|EventData.on_gui_confirmed|EventData.on_gui_selected_tab_changed
 function Admin.dispatch(event)
-    local element = event.element
-    if not (element and element.valid) then
-        return
-    end
-    local tags = element.tags
-    local action = tags and tags.lbf_admin_action
-    if not action then
-        return
-    end
-    local player = game.get_player(event.player_index)
-    if not player then
-        return
-    end
-
-    if action == 'toggle' then
-        Admin.toggle(player)
-        return
-    elseif action == 'close' then
-        Admin.close(player)
-        return
-    end
-    if not player.admin then
-        Admin.close(player) -- stale frame after demotion
-        return
-    end
-
-    if action == 'global-master' then
-        State.set_global_master(element.switch_state == 'right')
-        State.refresh_all()
-        Admin.refresh_all()
-    elseif action == 'master' then
-        State.set_master(tags.channel --[[@as LbfChannel]], element.state)
-        State.refresh_all()
-        Admin.refresh_all()
-    elseif action == 'lock' then
-        State.set_locked(tags.player_index --[[@as uint]], tags.channel --[[@as LbfChannel]], not element.state)
-        local target = game.get_player(tags.player_index --[[@as uint]])
-        if target then
-            State.refresh(target)
-        end
-        Admin.refresh_all()
-    elseif action == 'lock-master' then
-        State.set_locked_master(tags.player_index --[[@as uint]], element.switch_state == 'left')
-        local target = game.get_player(tags.player_index --[[@as uint]])
-        if target then
-            State.refresh(target)
-        end
-        Admin.refresh_all()
-    elseif action == 'watchdog-switch' then
-        -- set_enabled notifies the check listeners, which refresh all admin GUIs.
-        Watchdog.set_enabled(element.switch_state == 'right')
-    elseif action == 'threshold' then
-        if event.name == defines.events.on_gui_confirmed then
-            local value = tonumber(element.text)
-            if value and value >= 0 then
-                settings.global['lbf-spm-threshold'] = { value = value }
-            else
-                Admin.sync(player) -- restore the last good value
-            end
-        end
-    elseif action == 'tab' then
-        local frame = get_frame(player)
-        if frame then
-            update_tab_description(frame)
-        end
-    elseif action == 'search' or action == 'scope' then
-        local frame = get_frame(player)
-        if frame then
-            rebuild_rows(frame)
-        end
-    elseif action == 'search-toggle' then
-        local frame = get_frame(player)
-        if frame then
-            local field = frame.titlebar['lbf-search']
-            field.visible = element.toggled
-            if element.toggled then
-                field.focus()
-            elseif field.text ~= '' then
-                field.text = '' -- closing the search clears the filter
-                rebuild_rows(frame)
-            end
-        end
-    end
+    dispatch_action(event)
 end
 
 --- @param event EventData.on_gui_closed

@@ -695,110 +695,149 @@ local function import_reserves(player, data)
     end
 end
 
---- @param event EventData.on_gui_checked_state_changed|EventData.on_gui_value_changed|EventData.on_gui_click|EventData.on_gui_elem_changed|EventData.on_gui_text_changed|EventData.on_gui_selection_state_changed|EventData.on_gui_switch_state_changed|EventData.on_gui_confirmed
-function Gui.dispatch(event)
-    local element = event.element
-    if not (element and element.valid) then
-        return
+--- One dispatcher for every panel element, keyed on tags.lbf_action.
+--- GuiUtil.new_dispatcher asserts each action is only registered once, so a
+--- copy-pasted `on_action` can't silently shadow an earlier handler.
+local on_action, dispatch_action = GuiUtil.new_dispatcher('lbf_action')
+
+on_action('toggle-panel', function(_, _, _, player)
+    local data = State.get_player_data(player.index)
+    data.ui.open = not data.ui.open
+    Gui.build(player)
+end)
+
+on_action('toggle-section', function(_, _, tags, player)
+    local data = State.get_player_data(player.index)
+    local section = tags.section --[[@as string]]
+    data.ui.sections[section] = not data.ui.sections[section]
+    Gui.sync(player)
+end)
+
+on_action('master-switch', function(_, element, _, player)
+    State.set_player_master(player, element.switch_state == 'right')
+    State.refresh(player)
+end)
+
+on_action('toggle-setting', function(_, element, tags, player)
+    local id = tags.id --[[@as string]]
+    State.set_enabled(player, id, element.state)
+    if id == 'appearance_show_others_area' then
+        -- Viewer-opt-in (§12): this toggle changes what *other* owners'
+        -- renders show this player, not this player's own area.
+        State.refresh_all()
+    else
+        State.refresh(player)
     end
-    local tags = element.tags
-    local action = tags and tags.lbf_action
-    if not action then
-        return
-    end
-    local player = game.get_player(event.player_index)
-    if not player then
+end)
+
+on_action('toggle-summary', function(_, element, _, player)
+    local data = State.get_player_data(player.index)
+    data.summary_enabled = element.state
+    State.push_setting(player, 'lbf-show-summary')
+    State.refresh(player)
+end)
+
+on_action('radius-slider', function(_, element, _, player)
+    State.set_radius(player, element.slider_value)
+    State.refresh(player)
+end)
+
+on_action('shape', function(_, element, _, player)
+    local data = State.get_player_data(player.index)
+    data.shape = element.selected_index == 2 and 'square' or 'circle'
+    State.push_setting(player, 'lbf-shape')
+    State.refresh(player)
+end)
+
+on_action('opacity', function(_, element, _, player)
+    local data = State.get_player_data(player.index)
+    data.opacity = element.slider_value / 100
+    State.push_setting(player, 'lbf-opacity')
+    State.refresh(player)
+end)
+
+on_action('use-player-color', function(_, element, _, player)
+    local data = State.get_player_data(player.index)
+    data.use_player_color = element.state
+    State.push_setting(player, 'lbf-use-my-color')
+    State.refresh(player)
+end)
+
+on_action('color', function(_, element, tags, player)
+    local data = State.get_player_data(player.index)
+    local component = tags.component --[[@as string]]
+    data.color[component] = element.slider_value / 255
+    data.color.a = 1
+    State.push_setting(player, 'lbf-color')
+    State.refresh(player)
+end)
+
+on_action('color-text', function(_, element, tags, player)
+    local value = tonumber(element.text)
+    if not (value and value >= 0 and value <= 255) then
         return
     end
     local data = State.get_player_data(player.index)
+    local component = tags.component --[[@as string]]
+    data.color[component] = value / 255
+    data.color.a = 1
+    State.push_setting(player, 'lbf-color')
+    State.refresh(player)
+end)
 
-    if action == 'toggle-panel' then
-        data.ui.open = not data.ui.open
-        Gui.build(player)
-    elseif action == 'toggle-section' then
-        local section = tags.section --[[@as string]]
-        data.ui.sections[section] = not data.ui.sections[section]
-        Gui.sync(player)
-    elseif action == 'master-switch' then
-        State.set_player_master(player, element.switch_state == 'right')
-        State.refresh(player)
-    elseif action == 'toggle-setting' then
-        local id = tags.id --[[@as string]]
-        State.set_enabled(player, id, element.state)
-        if id == 'appearance_show_others_area' then
-            -- Viewer-opt-in (§12): this toggle changes what *other* owners'
-            -- renders show this player, not this player's own area.
-            State.refresh_all()
-        else
-            State.refresh(player)
+on_action('reserve-slot', function(event, _, tags, player)
+    local data = State.get_player_data(player.index)
+    local item = tags.item --[[@as string]]
+    if event.button == defines.mouse_button_type.right then
+        data.reserves[item] = nil
+        local editor = get_reserve_editor(player)
+        if editor and editor.tags.item == item then
+            reset_reserve_editor(editor) -- it was editing the removed item
         end
-    elseif action == 'toggle-summary' then
-        data.summary_enabled = element.state
-        State.push_setting(player, 'lbf-show-summary')
         State.refresh(player)
-    elseif action == 'radius-slider' then
-        State.set_radius(player, element.slider_value)
-        State.refresh(player)
-    elseif action == 'shape' then
-        data.shape = element.selected_index == 2 and 'square' or 'circle'
-        State.push_setting(player, 'lbf-shape')
-        State.refresh(player)
-    elseif action == 'opacity' then
-        data.opacity = element.slider_value / 100
-        State.push_setting(player, 'lbf-opacity')
-        State.refresh(player)
-    elseif action == 'use-player-color' then
-        data.use_player_color = element.state
-        State.push_setting(player, 'lbf-use-my-color')
-        State.refresh(player)
-    elseif action == 'color' then
-        local component = tags.component --[[@as string]]
-        data.color[component] = element.slider_value / 255
-        data.color.a = 1
-        State.push_setting(player, 'lbf-color')
-        State.refresh(player)
-    elseif action == 'color-text' then
-        local component = tags.component --[[@as string]]
-        local value = tonumber(element.text)
-        if value and value >= 0 and value <= 255 then
-            data.color[component] = value / 255
-            data.color.a = 1
-            State.push_setting(player, 'lbf-color')
-            State.refresh(player)
-        end
-    elseif action == 'reserve-slot' then
-        local item = tags.item --[[@as string]]
-        if event.button == defines.mouse_button_type.right then
-            data.reserves[item] = nil
-            local editor = get_reserve_editor(player)
-            if editor and editor.tags.item == item then
-                reset_reserve_editor(editor) -- it was editing the removed item
-            end
-            State.refresh(player)
-        else
-            open_reserve_editor(player, data, item)
-        end
-    elseif action == 'reserve-editor-elem' then
-        -- The picker button also receives plain clicks; only react to the pick.
-        if event.name == defines.events.on_gui_elem_changed then
-            local item = element.elem_value --[[@as string?]]
-            sync_editor_count(element.parent, item, item and (data.reserves[item] or prototypes.item[item].stack_size))
-        end
-    elseif action == 'reserve-editor-slider' then
-        element.parent['lbf-reserve-count'].text = tostring(element.slider_value)
-    elseif action == 'reserve-editor-count' then
-        if event.name == defines.events.on_gui_confirmed then
-            confirm_reserve_editor(player, data, element.parent)
-        else
-            -- Mid-typing: follow with the slider (clamped), never touch the text.
-            element.parent['lbf-reserve-slider'].slider_value = tonumber(element.text) or 0
-        end
-    elseif action == 'reserve-editor-confirm' then
-        confirm_reserve_editor(player, data, element.parent)
-    elseif action == 'reserve-import' then
-        import_reserves(player, data)
-        State.refresh(player)
+    else
+        open_reserve_editor(player, data, item)
     end
+end)
+
+on_action('reserve-editor-elem', function(event, element, _, player)
+    -- The picker button also receives plain clicks; only react to the pick.
+    if event.name ~= defines.events.on_gui_elem_changed then
+        return
+    end
+    local data = State.get_player_data(player.index)
+    local item = element.elem_value --[[@as string?]]
+    sync_editor_count(element.parent, item, item and (data.reserves[item] or prototypes.item[item].stack_size))
+end)
+
+on_action('reserve-editor-slider', function(_, element)
+    element.parent['lbf-reserve-count'].text = tostring(element.slider_value)
+end)
+
+on_action('reserve-editor-count', function(event, element, _, player)
+    local data = State.get_player_data(player.index)
+    if event.name == defines.events.on_gui_confirmed then
+        confirm_reserve_editor(player, data, element.parent)
+    else
+        -- Mid-typing: follow with the slider (clamped), never touch the text.
+        element.parent['lbf-reserve-slider'].slider_value = tonumber(element.text) or 0
+    end
+end)
+
+on_action('reserve-editor-confirm', function(_, element, _, player)
+    local data = State.get_player_data(player.index)
+    confirm_reserve_editor(player, data, element.parent)
+end)
+
+on_action('reserve-import', function(_, _, _, player)
+    local data = State.get_player_data(player.index)
+    import_reserves(player, data)
+    State.refresh(player)
+end)
+
+--- @param event EventData.on_gui_checked_state_changed|EventData.on_gui_value_changed|EventData.on_gui_click|EventData.on_gui_elem_changed|EventData.on_gui_text_changed|EventData.on_gui_selection_state_changed|EventData.on_gui_switch_state_changed|EventData.on_gui_confirmed
+function Gui.dispatch(event)
+    dispatch_action(event)
 end
 
 return Gui

@@ -82,6 +82,49 @@ function Gui.add_pusher(element)
     return element.add({ type = 'empty-widget', style = 'lbf_pusher' })
 end
 
+--- Builds an action-keyed GUI event dispatcher, replacing the if/elseif
+--- cascades a flat `element.tags[key]` switch tends to grow into (inspired by
+--- reference/gui.lua's per-event handler_factory, generalized to route many
+--- event types through one tags-keyed table instead of one table per event).
+--- Keying on tags rather than `element.name` is deliberate: sibling elements
+--- in a table/list often share a handler but can't share a name (or have no
+--- name at all), while their tags can carry both the action and any per-row
+--- data (item, channel, player_index, ...).
+--- `on(action, handler)` asserts the action isn't already registered — a
+--- silent second registration would just shadow the first one and the bug
+--- would only show up as "my handler never fires".
+--- @param key string tags field the action is read from (e.g. 'lbf_action')
+--- @return function on function(action: string, handler: function(event, element, tags, player))
+--- @return function dispatch function(event) — pass to `on(defines.events..., dispatch)`
+function Gui.new_dispatcher(key)
+    local handlers = {}
+
+    local function on(action, handler)
+        assert(not handlers[action], string.format('gui dispatcher(%s): handler already registered for action %q', key, action))
+        handlers[action] = handler
+    end
+
+    local function dispatch(event)
+        local element = event.element
+        if not (element and element.valid) then
+            return
+        end
+        local tags = element.tags
+        local action = tags and tags[key]
+        local handler = action and handlers[action]
+        if not handler then
+            return
+        end
+        local player = game.get_player(event.player_index)
+        if not player then
+            return
+        end
+        handler(event, element, tags, player)
+    end
+
+    return on, dispatch
+end
+
 --- Adds a collapsible section: a `subheader_frame` header (caption + an
 --- expand/collapse arrow) sitting above a body flow the caller fills in and
 --- whose visibility the arrow controls. Expand state is not tracked here —
