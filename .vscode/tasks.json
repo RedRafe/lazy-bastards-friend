@@ -10,6 +10,12 @@
       "group": "build",
     },
     {
+      "label": "Release",
+      "type": "shell",
+      "command": "chmod +x ./.vscode/tasks/release.sh ; ./.vscode/tasks/release.sh",
+      "group": "build",
+    },
+    {
       "label": "Copy",
       "type": "shell",
       "command": "chmod +x ./.vscode/tasks/copy.sh ; ./.vscode/tasks/copy.sh",

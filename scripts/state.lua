@@ -59,7 +59,7 @@ local TREE_DEF = {
                 id = 'appearance',
                 children = {
                     { id = 'appearance_fill', setting = 'lbf-fill-area' },
-                    { id = 'appearance_show_others', setting = 'lbf-show-to-others' },
+                    { id = 'appearance_show_others_area', setting = 'lbf-show-others-area' },
                     { id = 'appearance_starvation', setting = 'lbf-show-starvation' },
                 },
             },

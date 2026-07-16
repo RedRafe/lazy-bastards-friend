@@ -153,7 +153,7 @@ data:extend({
     },
     {
         type = 'bool-setting',
-        name = 'lbf-show-to-others',
+        name = 'lbf-show-others-area',
         setting_type = 'runtime-per-user',
         default_value = false,
         order = 'd[appearance]-g',

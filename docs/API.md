@@ -140,7 +140,7 @@ Full per-player state:
   shape     = 'circle',    -- 'circle' | 'square'
   flags     = {            -- behavior toggles (see set_player_flag)
     feed_fuel = true, feed_ingredients = true, collect_chests = false, collect_ground = false,
-    feed_trash = false, summary = false, appearance_show_others = false,
+    feed_trash = false, summary = false, appearance_show_others_area = false,
     feed_rebalance = false, appearance_starvation = false,
   },
   reserves  = { ['coal'] = 50 },  -- item name -> protected minimum
@@ -163,7 +163,7 @@ their panel. Valid flag names, each carrying its settings-tree family prefix
 | `'collect_ground'` | `false` | Collect channel also picks up items on the ground |
 | `'feed_trash'` | `false` | Feed channel drains logistic trash slots into nearby chests (paused while `collect_chests` is active) |
 | `'summary'` | `false` | show a per-cycle floating summary of what was moved |
-| `'appearance_show_others'` | `false` | the player's area render is visible to everyone |
+| `'appearance_show_others_area'` | `false` | this player also sees every other player's area render (viewer-side; does not affect whether others see *their* area) |
 | `'feed_rebalance'` | `false` | Feed channel moves surplus fuel/ingredients between over- and under-stocked machines, even when the player carries nothing (§1.1 pass 6) |
 | `'appearance_starvation'` | `false` | briefly show a red icon over machines that wanted an item the player couldn't spare, or green over ones already full |
 

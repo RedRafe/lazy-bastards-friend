@@ -69,6 +69,10 @@ on(defines.events.on_player_joined_game, function(event)
     local player = game.get_player(event.player_index)
     if player then
         RelativeGui.ensure(player)
+        -- Recreates their own render (hidden while offline, see leave below).
+        -- Other owners' whitelists are connection-independent (rendering.lua
+        -- iterates game.players, not connected_players), so this player's
+        -- entry in them is already correct — no State.refresh_all() needed.
         State.refresh(player)
     end
     AdminGui.refresh_all() -- online dots + connected-only lists
@@ -78,7 +82,9 @@ on(defines.events.on_player_left_game, function(event)
     local player = game.get_player(event.player_index)
     if player then
         AdminGui.close(player)
-        State.refresh(player) -- player.connected is false: destroys renders
+        -- player.connected is now false: Rendering.refresh destroys their own
+        -- render without recreating it. Doesn't touch anyone else's whitelist.
+        State.refresh(player)
     end
     AdminGui.refresh_all()
 end)
@@ -90,6 +96,10 @@ on(defines.events.on_player_removed, function(event)
         storage.players[event.player_index] = nil
     end
     storage.admin_guis[event.player_index] = nil
+    -- The removed index may still be sitting in other owners' render
+    -- whitelists (rendering.lua built them from game.players before removal)
+    -- — rebuild everyone so none of them hand the engine a stale identity.
+    State.refresh_all()
     AdminGui.refresh_all()
 end)
 
@@ -197,7 +207,14 @@ on(defines.events.on_runtime_mod_setting_changed, function(event)
         local player = game.get_player(event.player_index)
         if player then
             State.pull_setting(player, setting)
-            State.refresh(player)
+            if setting == 'lbf-show-others-area' then
+                -- Viewer-opt-in (§12): this player's own area is unaffected,
+                -- but every other owner's render list needs recomputing to
+                -- add/drop this player.
+                State.refresh_all()
+            else
+                State.refresh(player)
+            end
         end
     elseif setting == 'lbf-min-radius' or setting == 'lbf-max-radius' then
         State.refresh_all() -- re-clamp slider bounds and drawn radii everywhere

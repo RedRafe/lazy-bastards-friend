@@ -52,9 +52,18 @@ function Rendering.refresh(player)
 
     local radius = State.get_radius(player.index)
     local surface = anchor.surface
-    local players = nil -- visible to everyone
-    if not State.effective(player.index, 'appearance_show_others') then
-        players = { player.index }
+
+    -- Visibility is viewer-opt-in, not owner-opt-out (§12): the owner always
+    -- sees their own area; every other player is added only if *they* have
+    -- opted in to seeing others' areas. Connection status doesn't matter here
+    -- — an offline player's client renders nothing regardless, and this way
+    -- their entry is already correct the moment they reconnect, so join/leave
+    -- never need to touch anyone else's whitelist (see control.lua).
+    local players = { player.index }
+    for _, viewer in pairs(game.players) do
+        if viewer.index ~= player.index and State.effective(viewer.index, 'appearance_show_others_area') then
+            players[#players + 1] = viewer.index
+        end
     end
 
     if data.shape == 'square' then

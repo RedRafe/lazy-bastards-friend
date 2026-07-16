@@ -121,12 +121,12 @@ local function locale_suffix(id)
     return id
 end
 
--- 'appearance_fill'/'appearance_show_others' predate the settings tree and
--- keep their own locale keys (built alongside their sliders/extra tooltips)
--- rather than the generic 'flag-<suffix>-tooltip' pattern.
+-- 'appearance_fill'/'appearance_show_others_area' predate the settings tree
+-- and keep their own locale keys (built alongside their sliders/extra
+-- tooltips) rather than the generic 'flag-<suffix>-tooltip' pattern.
 local TOOLTIP_OVERRIDE = {
     appearance_fill = 'lbf-gui.fill-tooltip',
-    appearance_show_others = 'lbf-gui.show-others-tooltip',
+    appearance_show_others_area = 'lbf-gui.show-others-tooltip',
 }
 
 --- One checkbox per settings-tree node id — channels and flags alike; state/
@@ -311,7 +311,7 @@ function Gui.build(player)
         caption = { 'lbf-gui.show-others' },
         tooltip = { 'lbf-gui.show-others-tooltip' },
         state = false,
-        tags = { lbf_action = 'toggle-setting', id = 'appearance_show_others' },
+        tags = { lbf_action = 'toggle-setting', id = 'appearance_show_others_area' },
     })
     add_toggle_checkbox(appearance_body, 'appearance_starvation')
     -- Not a tree node: nothing gates the flying-text summary, it's a plain
@@ -653,7 +653,7 @@ function Gui.sync(player)
         row['lbf-color-' .. component].slider_value = value
         row['lbf-color-value-' .. component].text = tostring(value)
     end
-    sync_toggle_checkbox(appearance_body['lbf-show-others'], data, 'appearance_show_others')
+    sync_toggle_checkbox(appearance_body['lbf-show-others'], data, 'appearance_show_others_area')
     sync_toggle_checkbox(appearance_body['lbf-setting-appearance_starvation'], data, 'appearance_starvation')
     appearance_body['lbf-summary'].state = data.summary_enabled
 
@@ -723,8 +723,15 @@ function Gui.dispatch(event)
         State.set_player_master(player, element.switch_state == 'right')
         State.refresh(player)
     elseif action == 'toggle-setting' then
-        State.set_enabled(player, tags.id --[[@as string]], element.state)
-        State.refresh(player)
+        local id = tags.id --[[@as string]]
+        State.set_enabled(player, id, element.state)
+        if id == 'appearance_show_others_area' then
+            -- Viewer-opt-in (§12): this toggle changes what *other* owners'
+            -- renders show this player, not this player's own area.
+            State.refresh_all()
+        else
+            State.refresh(player)
+        end
     elseif action == 'toggle-summary' then
         data.summary_enabled = element.state
         State.push_setting(player, 'lbf-show-summary')

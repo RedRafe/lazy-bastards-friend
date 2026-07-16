@@ -59,6 +59,9 @@ end
 -- except 'summary' which isn't a tree node (DESIGN.md §12).
 -- BREAKING (2026-07-16): renamed from the flat 'fuel'/'chests'/... names to
 -- match the tree's family-prefixed ids — see changelog.txt / docs/API.md.
+-- BREAKING (2026-07-16): 'appearance_show_others' renamed to
+-- 'appearance_show_others_area' and flipped from owner-opt-out ("share my
+-- area") to viewer-opt-in ("show me others' areas") — see DESIGN.md §5/§12.
 local FLAG_NAMES = {
     feed_fuel = true,
     feed_ingredients = true,
@@ -66,7 +69,7 @@ local FLAG_NAMES = {
     collect_ground = true,
     feed_trash = true,
     summary = true,
-    appearance_show_others = true,
+    appearance_show_others_area = true,
     feed_rebalance = true,
     appearance_starvation = true,
 }
@@ -180,10 +183,16 @@ remote.add_interface('lazy-bastards-friend', {
         if flag == 'summary' then
             State.get_player_data(player.index).summary_enabled = value == true
             State.push_setting(player, 'lbf-show-summary')
+            State.refresh(player)
+        elseif flag == 'appearance_show_others_area' then
+            -- Viewer-opt-in (§12): changes what *other* owners' renders show
+            -- this player, not this player's own area.
+            State.set_enabled(player, flag, value == true)
+            State.refresh_all()
         else
             State.set_enabled(player, flag, value == true)
+            State.refresh(player)
         end
-        State.refresh(player)
     end,
 
     --- Clamped to the lbf-min-radius / lbf-max-radius map settings.
