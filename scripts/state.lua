@@ -1,5 +1,8 @@
---- Storage schema, per-player data access, and the tri-state activation model
---- (effective = master AND NOT locked AND enabled, per channel). See DESIGN.md §2, §9.
+--- Storage schema, per-player data access, and the settings-tree-backed
+--- activation model. See DESIGN.md §2, §8, §9 and scripts/lib/settings_tree.lua
+--- for the generic hierarchy engine this module configures.
+
+local SettingsTree = require('__lazy-bastards-friend__.scripts.lib.settings_tree')
 
 local State = {}
 
@@ -7,6 +10,74 @@ local State = {}
 
 --- @type LbfChannel[]
 State.channels = { 'collect', 'feed', 'combat' }
+
+--- The settings tree: 'mod' is the whole-mod master (mirrors the toolbar
+--- shortcut and the `lbf-enabled` setting). 'collect'/'feed'/'appearance' are
+--- umbrella nodes; their children are the fine-grained behavior/appearance
+--- flags gated by them at runtime. Child ids carry their family's prefix
+--- (`feed_fuel`, `collect_chests`, `appearance_fill`, …) — both for internal
+--- clarity and because these ids are also the public remote-API flag names
+--- (`set_player_flag`/`get_player_state`, docs/API.md); the GUI strips the
+--- prefix back off to reuse the existing unprefixed locale keys (§4.2,
+--- `relative.lua`'s `locale_suffix`).
+---
+--- 'combat' is a true child of 'feed' (DESIGN.md §12, 2026-07-16): turret
+--- feeding is *not* independent of the Feed channel — retiring Feed (e.g. the
+--- SPM watchdog) always stops it too, so `lbf-watchdog-stops-combat` (the
+--- "leave combat running" escape hatch) was removed as structurally
+--- impossible now. Combat keeps its own admin lock/global switch (it's still
+--- listed in `State.channels` for the admin GUI/remote API), just gated by
+--- Feed's chain as well.
+---
+--- 'starvation' is a child of 'appearance' (§12) — decoupled from Feed's
+--- *tree* gating (its own admin lock is independent of Feed's), even though
+--- in practice raid.lua only ever populates starved/saturated data while a
+--- feed pass actually runs.
+local TREE_DEF = {
+    {
+        id = 'mod',
+        setting = 'lbf-enabled',
+        children = {
+            {
+                id = 'collect',
+                children = {
+                    { id = 'collect_chests', setting = 'lbf-take-chests' },
+                    { id = 'collect_ground', setting = 'lbf-pickup-ground' },
+                },
+            },
+            {
+                id = 'feed',
+                children = {
+                    { id = 'feed_fuel', setting = 'lbf-feed-fuel' },
+                    { id = 'feed_ingredients', setting = 'lbf-feed-ingredients' },
+                    { id = 'feed_trash', setting = 'lbf-drain-trash' },
+                    { id = 'feed_rebalance', setting = 'lbf-rebalance' },
+                    { id = 'combat' },
+                },
+            },
+            {
+                id = 'appearance',
+                children = {
+                    { id = 'appearance_fill', setting = 'lbf-fill-area' },
+                    { id = 'appearance_show_others', setting = 'lbf-show-to-others' },
+                    { id = 'appearance_starvation', setting = 'lbf-show-starvation' },
+                },
+            },
+        },
+    },
+}
+
+--- @type table
+local Tree = SettingsTree.new(TREE_DEF)
+State.tree = Tree
+
+-- setting name -> tree node id, for every node that mirrors a mod setting.
+local BOOL_SETTING_NODE = {}
+for id, node in pairs(Tree.by_id) do
+    if node.setting then
+        BOOL_SETTING_NODE[node.setting] = id
+    end
+end
 
 -- Refresh handlers are registered once at require time by control.lua (rendering,
 -- GUI sync, shortcut sync) and invoked whenever a player's effective state, radius,
@@ -37,43 +108,24 @@ end
 
 --- Idempotent storage setup, safe for on_init and on_configuration_changed.
 function State.init()
-    storage.version = 1
-    if storage.master == nil then
-        storage.master = true -- global whole-mod switch (admin GUI "Everyone" row)
-    end
-    storage.active = storage.active or { collect = true, feed = true, combat = true }
+    storage.settings = storage.settings or {}
+    Tree:init_global(storage.settings)
+
     storage.auto_disabled = storage.auto_disabled or false
     storage.spm_strikes = storage.spm_strikes or 0
     storage.scheduler = storage.scheduler or { queue = {}, cursor = 1 }
     storage.admin_guis = storage.admin_guis or {}
     storage.players = storage.players or {}
     storage.items_moved = storage.items_moved or 0
-    -- Backfill flags added after a player's record was created (checkbox
-    -- states must be booleans, never nil), and drop reserves whose item
-    -- prototype no longer exists (mod removed).
+
     for _, data in pairs(storage.players) do
-        local flags = data.flags
-        if flags.trash == nil then
-            flags.trash = false
-        end
-        if flags.summary == nil then
-            flags.summary = false
-        end
-        if flags.rebalance == nil then
-            flags.rebalance = false
-        end
-        if flags.starvation == nil then
-            flags.starvation = false
+        data.settings = data.settings or {}
+        Tree:init_player(data.settings)
+        if data.summary_enabled == nil then
+            data.summary_enabled = false
         end
         data.summary = data.summary or { collected = {}, fed = {}, next_flush = 0 }
         data.excluded = data.excluded or {}
-        if data.master == nil then
-            data.master = true
-        end
-        if data.locked_master == nil then
-            data.locked_master = false
-        end
-        data.show_area = nil -- superseded by fill (fill=false now hides the area entirely)
         data.ui = data.ui or State.default_ui()
         for id, default in pairs(State.default_ui().sections) do
             if data.ui.sections[id] == nil then
@@ -89,17 +141,13 @@ function State.init()
 end
 
 --- @class LbfPlayerData
---- @field master boolean per-player master switch: false turns the whole mod off for this player, preserving per-channel prefs
---- @field locked_master boolean admin per-player master lock: true turns the whole mod off for this player regardless of their prefs
---- @field enabled table<LbfChannel, boolean>
---- @field locked table<LbfChannel, boolean>
+--- @field settings table<string, {enabled: boolean, allowed: boolean}> settings-tree state (channels, behavior flags, appearance toggles)
 --- @field radius uint
 --- @field shape 'circle'|'square'
 --- @field use_player_color boolean
 --- @field color Color
---- @field fill boolean false = the serviced area is not drawn at all
 --- @field opacity double
---- @field flags table<string, boolean>
+--- @field summary_enabled boolean flying-text transfer summary toggle (ungated — see DESIGN.md §12)
 --- @field reserves table<string, uint>
 --- @field excluded table<uint, boolean> unit_number -> excluded from this player's raids (§10.4)
 --- @field cache {key: string, tick: uint, x: double, y: double, entities: LuaEntity[]}?
@@ -134,27 +182,13 @@ function State.get_player_data(player_index)
     local data = storage.players[player_index]
     if not data then
         data = {
-            master = true,
-            locked_master = false,
-            enabled = { collect = true, feed = true, combat = true },
-            locked = { collect = false, feed = false, combat = false },
+            settings = {},
             radius = 16,
             shape = 'circle',
             use_player_color = true,
             color = { r = 1, g = 0.5, b = 0, a = 1 },
-            fill = true,
             opacity = 0.08,
-            flags = {
-                fuel = true,
-                ingredients = true,
-                chests = false,
-                ground = false,
-                trash = false,
-                summary = false,
-                show_others = false,
-                rebalance = false,
-                starvation = false,
-            },
+            summary_enabled = false,
             reserves = {},
             excluded = {},
             render = {},
@@ -163,63 +197,25 @@ function State.get_player_data(player_index)
             summary = { collected = {}, fed = {}, next_flush = 0 },
             ui = State.default_ui(),
         }
+        Tree:init_player(data.settings)
         storage.players[player_index] = data
     end
     return data
 end
 
---- Per-player mod settings kept in sync with storage (DESIGN.md §8): each entry
---- mirrors one storage.players[i] field, both ways, so admins/players can drive
---- the mod from the in-game settings screen as well as the relative GUI.
+--- Per-player mod settings kept in sync with storage (DESIGN.md §8): every
+--- boolean tree node that declares a `setting` mirrors it both ways
+--- automatically; a handful of value-type appearance fields (not tree nodes —
+--- "enabled" doesn't apply to a slider/color) are mirrored explicitly below.
 --- @type table<string, {get: fun(data: LbfPlayerData): any, set: fun(data: LbfPlayerData, value: any)}>
-local PLAYER_SETTINGS = {
-    ['lbf-enabled'] = {
-        get = function(data) return data.master end,
-        set = function(data, value) data.master = value end,
-    },
+local VALUE_SETTINGS = {
     ['lbf-radius'] = {
         get = function(data) return data.radius end,
         set = function(data, value) data.radius = State.clamp_radius(value) end,
     },
-    ['lbf-feed-fuel'] = {
-        get = function(data) return data.flags.fuel end,
-        set = function(data, value) data.flags.fuel = value end,
-    },
-    ['lbf-feed-ingredients'] = {
-        get = function(data) return data.flags.ingredients end,
-        set = function(data, value) data.flags.ingredients = value end,
-    },
-    ['lbf-take-chests'] = {
-        get = function(data) return data.flags.chests end,
-        set = function(data, value) data.flags.chests = value end,
-    },
-    ['lbf-pickup-ground'] = {
-        get = function(data) return data.flags.ground end,
-        set = function(data, value) data.flags.ground = value end,
-    },
-    ['lbf-drain-trash'] = {
-        get = function(data) return data.flags.trash end,
-        set = function(data, value) data.flags.trash = value end,
-    },
-    ['lbf-show-summary'] = {
-        get = function(data) return data.flags.summary end,
-        set = function(data, value) data.flags.summary = value end,
-    },
-    ['lbf-rebalance'] = {
-        get = function(data) return data.flags.rebalance end,
-        set = function(data, value) data.flags.rebalance = value end,
-    },
-    ['lbf-show-starvation'] = {
-        get = function(data) return data.flags.starvation end,
-        set = function(data, value) data.flags.starvation = value end,
-    },
     ['lbf-shape'] = {
         get = function(data) return data.shape end,
         set = function(data, value) data.shape = value == 'square' and 'square' or 'circle' end,
-    },
-    ['lbf-fill-area'] = {
-        get = function(data) return data.fill end,
-        set = function(data, value) data.fill = value end,
     },
     ['lbf-opacity'] = {
         get = function(data) return math.floor(data.opacity * 100 + 0.5) end,
@@ -233,44 +229,48 @@ local PLAYER_SETTINGS = {
         get = function(data) return data.color end,
         set = function(data, value) data.color = { r = value.r, g = value.g, b = value.b, a = 1 } end,
     },
-    ['lbf-show-to-others'] = {
-        get = function(data) return data.flags.show_others end,
-        set = function(data, value) data.flags.show_others = value end,
+    ['lbf-show-summary'] = {
+        get = function(data) return data.summary_enabled end,
+        set = function(data, value) data.summary_enabled = value end,
     },
 }
-State.player_settings = PLAYER_SETTINGS
 
--- Per-player mod setting each behavior flag mirrors (relative-gui / remote API, §8).
--- Shared so anything writing to data.flags[<flag>] can push the same setting
--- the relative-gui checkbox would have (State.push_setting).
-State.flag_setting = {
-    fuel = 'lbf-feed-fuel',
-    ingredients = 'lbf-feed-ingredients',
-    chests = 'lbf-take-chests',
-    ground = 'lbf-pickup-ground',
-    trash = 'lbf-drain-trash',
-    summary = 'lbf-show-summary',
-    show_others = 'lbf-show-to-others',
-    rebalance = 'lbf-rebalance',
-    starvation = 'lbf-show-starvation',
-}
+-- Every mirrored per-player mod setting name, boolean tree nodes and value
+-- fields alike — control.lua's on_runtime_mod_setting_changed uses this to
+-- recognize which settings belong to State.pull_setting at all.
+--- @type table<string, boolean>
+State.player_settings = {}
+for name in pairs(BOOL_SETTING_NODE) do
+    State.player_settings[name] = true
+end
+for name in pairs(VALUE_SETTINGS) do
+    State.player_settings[name] = true
+end
 
 --- Read one per-player mod setting into storage (settings screen -> storage).
 --- @param player LuaPlayer
 --- @param name string
 function State.pull_setting(player, name)
-    local field = PLAYER_SETTINGS[name]
-    if not field then
+    local value = settings.get_player_settings(player)[name].value
+    local node_id = BOOL_SETTING_NODE[name]
+    if node_id then
+        Tree:set_enabled(State.get_player_data(player.index).settings, node_id, value == true)
         return
     end
-    field.set(State.get_player_data(player.index), settings.get_player_settings(player)[name].value)
+    local field = VALUE_SETTINGS[name]
+    if field then
+        field.set(State.get_player_data(player.index), value)
+    end
 end
 
 --- Read every mirrored per-player mod setting into storage. Called on player
 --- created/joined and when the mod is added to an existing save.
 --- @param player LuaPlayer
 function State.init_player(player)
-    for name in pairs(PLAYER_SETTINGS) do
+    for name in pairs(BOOL_SETTING_NODE) do
+        State.pull_setting(player, name)
+    end
+    for name in pairs(VALUE_SETTINGS) do
         State.pull_setting(player, name)
     end
 end
@@ -278,8 +278,6 @@ end
 --- Push one storage field out to its mirrored per-player mod setting (relative
 --- GUI -> settings screen). No-op if already equal, so it never re-triggers
 --- itself via on_runtime_mod_setting_changed.
---- @param player LuaPlayer
---- @param name string
 --- @param a any
 --- @param b any
 --- @return boolean
@@ -290,12 +288,21 @@ local function setting_values_equal(a, b)
     return a == b
 end
 
+--- @param player LuaPlayer
+--- @param name string
 function State.push_setting(player, name)
-    local field = PLAYER_SETTINGS[name]
-    if not field then
-        return
+    local data = State.get_player_data(player.index)
+    local value
+    local node_id = BOOL_SETTING_NODE[name]
+    if node_id then
+        value = data.settings[node_id].enabled
+    else
+        local field = VALUE_SETTINGS[name]
+        if not field then
+            return
+        end
+        value = field.get(data)
     end
-    local value = field.get(State.get_player_data(player.index))
     local player_settings = settings.get_player_settings(player)
     if not setting_values_equal(player_settings[name].value, value) then
         player_settings[name] = { value = value }
@@ -303,16 +310,11 @@ function State.push_setting(player, name)
 end
 
 --- @param player_index uint
---- @param channel LbfChannel
+--- @param id string tree node id (channel or behavior/appearance flag)
 --- @return boolean
-function State.effective(player_index, channel)
+function State.effective(player_index, id)
     local data = State.get_player_data(player_index)
-    return storage.master
-        and storage.active[channel]
-        and not data.locked_master
-        and not data.locked[channel]
-        and data.master
-        and data.enabled[channel]
+    return Tree:effective(storage.settings, data.settings, id)
 end
 
 --- @param player_index uint
@@ -328,11 +330,11 @@ end
 
 --- @return boolean
 function State.any_master()
-    if not storage.master then
+    if not storage.settings.mod.enabled then
         return false
     end
     for _, channel in pairs(State.channels) do
-        if storage.active[channel] then
+        if storage.settings[channel].enabled then
             return true
         end
     end
@@ -343,7 +345,7 @@ end
 --- channel masters and every per-player setting; does not touch the watchdog.
 --- @param value boolean
 function State.set_global_master(value)
-    storage.master = value
+    Tree:set_global_enabled(storage.settings, 'mod', value)
 end
 
 --- Global masters no longer touch the watchdog: re-enabling a channel for
@@ -352,24 +354,40 @@ end
 --- @param channel LbfChannel
 --- @param value boolean
 function State.set_master(channel, value)
-    storage.active[channel] = value
+    Tree:set_global_enabled(storage.settings, channel, value)
 end
 
 --- "All masters" = the global switch plus every channel master (the
 --- singleplayer revive path in set_player_master).
 --- @param value boolean
 function State.set_all_masters(value)
-    storage.master = value
+    Tree:set_global_enabled(storage.settings, 'mod', value)
     for _, channel in pairs(State.channels) do
-        storage.active[channel] = value
+        Tree:set_global_enabled(storage.settings, channel, value)
     end
 end
 
+--- Single write path for any per-player tree node's own preference — the
+--- channel checkboxes and every behavior/appearance flag all go through this
+--- (replaces the old separate set_player_enabled/flag-write paths).
+--- @param player LuaPlayer
+--- @param id string
+--- @param value boolean
+function State.set_enabled(player, id, value)
+    local data = State.get_player_data(player.index)
+    Tree:set_enabled(data.settings, id, value)
+    local node = Tree:node(id)
+    if node.setting then
+        State.push_setting(player, node.setting)
+    end
+end
+
+--- Back-compat name for channel checkboxes (channels are just tree nodes now).
 --- @param player LuaPlayer
 --- @param channel LbfChannel
 --- @param value boolean
 function State.set_player_enabled(player, channel, value)
-    State.get_player_data(player.index).enabled[channel] = value
+    State.set_enabled(player, channel, value)
 end
 
 --- Single write path for the per-player master switch (GUI switch and toolbar
@@ -379,20 +397,19 @@ end
 --- @param player LuaPlayer
 --- @param value boolean
 function State.set_player_master(player, value)
-    State.get_player_data(player.index).master = value
-    State.push_setting(player, 'lbf-enabled')
+    State.set_enabled(player, 'mod', value)
     if value and player.admin and not game.is_multiplayer() then
         State.set_all_masters(true)
     end
 end
 
---- Admin per-player, per-channel lock. Locked = the channel is off for that
---- player no matter what they choose (§2).
+--- Admin per-player lock for any tree node (channel or flag). Locked = the
+--- node is off for that player no matter what they choose (§2).
 --- @param player_index uint
---- @param channel LbfChannel
+--- @param id string
 --- @param locked boolean
-function State.set_locked(player_index, channel, locked)
-    State.get_player_data(player_index).locked[channel] = locked
+function State.set_locked(player_index, id, locked)
+    Tree:set_allowed(State.get_player_data(player_index).settings, id, not locked)
 end
 
 --- Admin per-player master lock: the whole mod is off for that player no
@@ -400,7 +417,7 @@ end
 --- @param player_index uint
 --- @param locked boolean
 function State.set_locked_master(player_index, locked)
-    State.get_player_data(player_index).locked_master = locked
+    State.set_locked(player_index, 'mod', locked)
 end
 
 --- @param radius number

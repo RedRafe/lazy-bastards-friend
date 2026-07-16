@@ -61,11 +61,10 @@ end
 local function trip()
     storage.auto_disabled = true
     storage.spm_strikes = 0
-    storage.active.collect = false
-    storage.active.feed = false
-    if settings.global['lbf-watchdog-stops-combat'].value == true then
-        storage.active.combat = false
-    end
+    -- 'combat' is a tree child of 'feed' (DESIGN.md §12): stopping feed
+    -- already stops turret-feeding too, no separate write needed.
+    State.set_master('collect', false)
+    State.set_master('feed', false)
     game.print({ 'lbf-message.retired' })
     State.refresh_all() -- renders, GUIs, shortcut indicators, scheduler, and this watchdog
 end
@@ -130,12 +129,11 @@ end
 --- Recompute whether the watchdog should run, persist it, re-register.
 --- Call from events only (writes storage) — never from on_load.
 function Watchdog.rebuild()
-    local active = storage.active
+    local active = storage.settings
     -- Nothing to retire while the global switch is off (§4.3 "Everyone" row).
-    local stops_anything = storage.master
-        and (active.collect
-            or active.feed
-            or (settings.global['lbf-watchdog-stops-combat'].value == true and active.combat))
+    -- 'combat' isn't checked separately — it's a tree child of 'feed' now, so
+    -- stopping feed always stops it too (DESIGN.md §12).
+    local stops_anything = active.mod.enabled and (active.collect.enabled or active.feed.enabled)
     storage.watchdog_armed = (
         settings.global['lbf-watchdog-enabled'].value == true
         and not storage.auto_disabled

@@ -62,10 +62,10 @@ Event.add(defines.events.on_player_created, function(event)
     end)
 
     Harness.check('set_player_flag / get_player_state round-trip', function()
-        call('set_player_flag', player.index, 'ground', true)
-        local on = call('get_player_state', player.index).flags.ground == true
-        call('set_player_flag', player.index, 'ground', false)
-        local off = call('get_player_state', player.index).flags.ground == false
+        call('set_player_flag', player.index, 'collect_ground', true)
+        local on = call('get_player_state', player.index).flags.collect_ground == true
+        call('set_player_flag', player.index, 'collect_ground', false)
+        local off = call('get_player_state', player.index).flags.collect_ground == false
         return on and off
     end)
 

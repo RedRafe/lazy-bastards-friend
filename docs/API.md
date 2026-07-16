@@ -13,25 +13,37 @@ arguments raise a Lua error with a `lazy-bastards-friend:` prefix — wrap in
 
 ## Concepts
 
-- **Channels** — the mod's three independent features, always addressed by
-  string name:
+- **Channels** — the mod's three features, always addressed by string name:
   - `'collect'` — pull finished products / burnt results (and opt-in chest
     contents) from machines into the player's inventory.
   - `'feed'` — push fuel and ingredients from the player into machines (and
     opt-in, drain their trash slots into chests).
-  - `'combat'` — keep turrets topped up with ammo.
+  - `'combat'` — keep turrets topped up with ammo. **Not independent of
+    `'feed'`** (2026-07-16): turning Feed off — including the SPM watchdog
+    retiring it — always stops turret-feeding too. Combat still has its own
+    admin lock/global master switch, but can never be effective while Feed
+    isn't.
 - **Tri-state activation** — a channel actually runs for a player only if all
   of these are true: the global whole-mod switch is on (`set_global_master`),
   the channel's global master is on (`set_active`), the player is not
   admin-locked — neither for the whole mod (`lock_player_master`) nor for that
   channel (`lock_player`) — and the player's own toggle is on
-  (`set_player_enabled`). The combined result is reported as `effective` in
-  `get_player_state`.
-- **Watchdog** — the mod retires Collect+Feed automatically once a force's
-  science consumption passes the `lbf-spm-threshold` map setting. Re-enabling
-  masters through `set_active(..., true)` does **not** re-arm it — only
+  (`set_player_enabled`). For Combat, this chain also includes Feed's own
+  global/lock/toggle (see above). The combined result is reported as
+  `effective` in `get_player_state`.
+- **Watchdog** — the mod retires Collect+Feed (and, transitively, Combat)
+  automatically once a force's science consumption passes the
+  `lbf-spm-threshold` map setting. Re-enabling masters through
+  `set_active(..., true)` does **not** re-arm it — only
   `set_watchdog_enabled(true)` (or the switch in the admin GUI's Watchdog tab)
   does.
+
+Internally, channels and behavior flags are nodes of one hierarchical
+settings tree (`scripts/lib/settings_tree.lua`, DESIGN.md §2/§9) — this is
+mostly an implementation detail, but two of its shapes are public-API-visible:
+`'combat'` is a tree child of `'feed'` (above), and behavior/appearance flag
+names carry a family prefix matching their tree parent (see
+`set_player_flag` below).
 
 ## Functions
 
@@ -127,9 +139,9 @@ Full per-player state:
   radius    = 16,          -- service radius, tiles (already clamped)
   shape     = 'circle',    -- 'circle' | 'square'
   flags     = {            -- behavior toggles (see set_player_flag)
-    fuel = true, ingredients = true, chests = false, ground = false,
-    trash = false, summary = false, show_others = false,
-    rebalance = false, starvation = false,
+    feed_fuel = true, feed_ingredients = true, collect_chests = false, collect_ground = false,
+    feed_trash = false, summary = false, appearance_show_others = false,
+    feed_rebalance = false, appearance_starvation = false,
   },
   reserves  = { ['coal'] = 50 },  -- item name -> protected minimum
 }
@@ -140,23 +152,24 @@ The returned table is a copy — mutating it does nothing.
 ### `set_player_flag(player_index, flag, value)`
 
 Set one of the player's behavior toggles, exactly as if they clicked it in
-their panel. Valid flag names:
+their panel. Valid flag names, each carrying its settings-tree family prefix
+(`feed_`, `collect_`, `appearance_`) except `summary`, which is unchanged:
 
 | flag | default | |
 |---|---|---|
-| `'fuel'` | `true` | Feed channel tops up burners with fuel |
-| `'ingredients'` | `true` | Feed channel fills machine inputs (recipes, smeltables, science packs) |
-| `'chests'` | `false` | Collect channel also empties chests (needs the `lbf-allow-chest-take` map setting) |
-| `'ground'` | `false` | Collect channel also picks up items on the ground |
-| `'trash'` | `false` | Feed channel drains logistic trash slots into nearby chests (paused while `chests` is active) |
+| `'feed_fuel'` | `true` | Feed channel tops up burners with fuel |
+| `'feed_ingredients'` | `true` | Feed channel fills machine inputs (recipes, smeltables, science packs) |
+| `'collect_chests'` | `false` | Collect channel also empties chests (needs the `lbf-allow-chest-take` map setting) |
+| `'collect_ground'` | `false` | Collect channel also picks up items on the ground |
+| `'feed_trash'` | `false` | Feed channel drains logistic trash slots into nearby chests (paused while `collect_chests` is active) |
 | `'summary'` | `false` | show a per-cycle floating summary of what was moved |
-| `'show_others'` | `false` | the player's area render is visible to everyone |
-| `'rebalance'` | `false` | Feed channel moves surplus fuel/ingredients between over- and under-stocked machines, even when the player carries nothing (§1.1 pass 6) |
-| `'starvation'` | `false` | briefly show a red icon over machines that wanted an item the player couldn't spare, or green over ones already full |
+| `'appearance_show_others'` | `false` | the player's area render is visible to everyone |
+| `'feed_rebalance'` | `false` | Feed channel moves surplus fuel/ingredients between over- and under-stocked machines, even when the player carries nothing (§1.1 pass 6) |
+| `'appearance_starvation'` | `false` | briefly show a red icon over machines that wanted an item the player couldn't spare, or green over ones already full |
 
 ```lua
 -- Scenario hands out pre-configured chest raiding:
-remote.call('lazy-bastards-friend', 'set_player_flag', 1, 'chests', true)
+remote.call('lazy-bastards-friend', 'set_player_flag', 1, 'collect_chests', true)
 ```
 
 ### `set_player_radius(player_index, radius)`

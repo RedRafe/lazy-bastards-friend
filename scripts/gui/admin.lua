@@ -1,6 +1,6 @@
 --- Admin frame (DESIGN.md §4.3), tabbed like the map-settings GUI:
 --- - Watchdog tab: on/off switch (On after a trip re-arms — the only re-arm
----   path), SPM threshold field, stops-combat toggle, live SPM/status readout.
+---   path), SPM threshold field, live SPM/status readout.
 --- - Players tab: /admin-style roster (titlebar search, alphabetical) where
 ---   every row is "On/Off switch + one lock checkbox per channel", including
 ---   the global "Everyone" row above the table (global switch + masters).
@@ -123,17 +123,6 @@ local function build_watchdog_tab(tabs)
         tags = { lbf_admin_action = 'threshold' },
     }), { width = 70 })
 
-    local combat_row = add_setting_row(
-        settings_frame, 'combat-row', { 'lbf-gui.watchdog-combat' }, { 'lbf-gui.watchdog-combat-tooltip' }
-    )
-    combat_row.add({
-        type = 'checkbox',
-        name = 'lbf-watchdog-combat',
-        state = false,
-        tooltip = { 'lbf-gui.watchdog-combat-tooltip' },
-        tags = { lbf_admin_action = 'watchdog-combat' },
-    })
-
     local stats_frame = page.add({
         type = 'frame',
         name = 'lbf-stats',
@@ -158,7 +147,7 @@ local function build_players_tab(tabs)
 
     -- Global controls, above the player manager: one captioned bordered frame
     -- whose single row reads exactly like a player row — On/Off switch on the
-    -- left (the global whole-mod switch, storage.master), channel checkboxes
+    -- left (the global whole-mod switch, storage.settings.mod), channel checkboxes
     -- (the masters) on the right.
     local globals = page.add({
         type = 'frame',
@@ -184,7 +173,7 @@ local function build_players_tab(tabs)
             name = 'lbf-master-' .. channel,
             caption = { 'lbf-gui.col-' .. channel },
             tooltip = { 'lbf-gui.master-tooltip' },
-            state = storage.active[channel],
+            state = storage.settings[channel].enabled,
             tags = { lbf_admin_action = 'master', channel = channel },
         })
     end
@@ -251,15 +240,16 @@ local function rebuild_rows(frame)
         )
 
         -- On/Off: the admin's whole-mod lock for this player.
+        local mod = data.settings.mod
         --- @type LocalisedString
         local master_tooltip = { 'lbf-gui.lock-master-tooltip', target.name }
-        if not data.master then
+        if not mod.enabled then
             master_tooltip = { '', master_tooltip, '\n', { 'lbf-gui.own-master-off' } }
         end
         grid.add({
             type = 'switch',
-            switch_state = data.locked_master and 'left' or 'right',
-            enabled = storage.master,
+            switch_state = mod.allowed and 'right' or 'left',
+            enabled = storage.settings.mod.enabled,
             tooltip = master_tooltip,
             tags = { lbf_admin_action = 'lock-master', player_index = target.index },
         })
@@ -267,16 +257,16 @@ local function rebuild_rows(frame)
         for _, channel in pairs(State.channels) do
             --- @type LocalisedString
             local tooltip = { 'lbf-gui.lock-tooltip', target.name }
-            if not data.enabled[channel] then
+            if not data.settings[channel].enabled then
                 -- The read-only "their own preference differs" indicator (§4.3).
                 tooltip = { '', tooltip, '\n', { 'lbf-gui.own-pref-off' } }
             end
             grid.add({
                 type = 'checkbox',
-                state = not data.locked[channel],
+                state = data.settings[channel].allowed,
                 -- Greyed when something above it already turns the cell moot:
                 -- the global switch, that channel's master, or the row's On/Off.
-                enabled = storage.master and storage.active[channel] and not data.locked_master,
+                enabled = storage.settings.mod.enabled and storage.settings[channel].enabled and mod.allowed,
                 tooltip = tooltip,
                 tags = { lbf_admin_action = 'lock', player_index = target.index, channel = channel },
             })
@@ -311,9 +301,6 @@ function Admin.sync(player)
     if tonumber(field.text) ~= threshold then
         field.text = string.format('%g', threshold)
     end
-    local combat_stops = settings.global['lbf-watchdog-stops-combat'].value == true
-    settings_group['combat-row']['lbf-watchdog-combat'].state = combat_stops
-
     local stats_group = watchdog['lbf-stats']
     local status = Watchdog.status()
     local status_label = stats_group['status-row']['lbf-status']
@@ -325,11 +312,11 @@ function Admin.sync(player)
     stats_group['activity-row']['lbf-moved'].caption = string.format('%d [img=item.lbf-items-moved]', moved)
 
     local globals = get_tabs(frame).players['lbf-globals'].row
-    globals['lbf-global-master'].switch_state = storage.master and 'right' or 'left'
+    globals['lbf-global-master'].switch_state = storage.settings.mod.enabled and 'right' or 'left'
     for _, channel in pairs(State.channels) do
         local box = globals['lbf-master-' .. channel]
-        box.state = storage.active[channel]
-        box.enabled = storage.master -- same greying a player row gets from its switch
+        box.state = storage.settings[channel].enabled
+        box.enabled = storage.settings.mod.enabled -- same greying a player row gets from its switch
     end
     rebuild_rows(frame)
 end
@@ -516,9 +503,6 @@ function Admin.dispatch(event)
     elseif action == 'watchdog-switch' then
         -- set_enabled notifies the check listeners, which refresh all admin GUIs.
         Watchdog.set_enabled(element.switch_state == 'right')
-    elseif action == 'watchdog-combat' then
-        -- The setting-changed handler resets the debounce and refreshes GUIs.
-        settings.global['lbf-watchdog-stops-combat'] = { value = element.state == true }
     elseif action == 'threshold' then
         if event.name == defines.events.on_gui_confirmed then
             local value = tonumber(element.text)

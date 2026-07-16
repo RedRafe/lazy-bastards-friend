@@ -33,9 +33,9 @@ Event.add(defines.events.on_player_created, function(event)
     if not player then
         return
     end
-    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'fuel', false)
-    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'ingredients', false)
-    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'rebalance', true)
+    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'feed_fuel', false)
+    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'feed_ingredients', false)
+    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'feed_rebalance', true)
 
     Harness.watch('player coal never changes (rebalance never touches the player)', function()
         return player.get_main_inventory().get_item_count('coal') > 0

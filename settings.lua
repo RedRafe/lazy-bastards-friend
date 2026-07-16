@@ -1,5 +1,7 @@
 data:extend({
-    -- Global runtime (map settings, admin-editable)
+    -- Global runtime (map settings, admin-editable). Ordered by family to
+    -- match the relative GUI's mod-setting-name icon prefixes: watchdog,
+    -- then collect (behavior), then appearance, then other/technical.
     {
         type = 'bool-setting',
         name = 'lbf-watchdog-enabled',
@@ -17,10 +19,10 @@ data:extend({
     },
     {
         type = 'bool-setting',
-        name = 'lbf-watchdog-stops-combat',
+        name = 'lbf-allow-chest-take',
         setting_type = 'runtime-global',
-        default_value = false,
-        order = 'a[watchdog]-c',
+        default_value = true,
+        order = 'b[collect]-a',
     },
     {
         type = 'int-setting',
@@ -29,7 +31,7 @@ data:extend({
         default_value = 4,
         minimum_value = 1,
         maximum_value = 100,
-        order = 'b[radius]-a',
+        order = 'c[appearance]-a',
     },
     {
         type = 'int-setting',
@@ -38,7 +40,7 @@ data:extend({
         default_value = 32,
         minimum_value = 1,
         maximum_value = 100,
-        order = 'b[radius]-b',
+        order = 'c[appearance]-b',
     },
     {
         type = 'int-setting',
@@ -48,22 +50,59 @@ data:extend({
         minimum_value = 6,
         maximum_value = 600,
         hidden = true,
-        order = 'c[perf]-a',
+        order = 'd[other]-a',
     },
-    {
-        type = 'bool-setting',
-        name = 'lbf-allow-chest-take',
-        setting_type = 'runtime-global',
-        default_value = true,
-        order = 'd[chests]-a',
-    },
-    -- Per-player runtime.
+    -- Per-player runtime. Ordered to match the relative GUI top-to-bottom:
+    -- master switch, then Behavior (Feed, then Take/collect), then
+    -- Appearance (radius through show-starvation/summary).
     {
         type = 'bool-setting',
         name = 'lbf-enabled',
         setting_type = 'runtime-per-user',
         default_value = true,
-        order = '0',
+        order = 'a[other]-a',
+    },
+    {
+        type = 'bool-setting',
+        name = 'lbf-feed-fuel',
+        setting_type = 'runtime-per-user',
+        default_value = true,
+        order = 'b[feed]-a',
+    },
+    {
+        type = 'bool-setting',
+        name = 'lbf-feed-ingredients',
+        setting_type = 'runtime-per-user',
+        default_value = true,
+        order = 'b[feed]-b',
+    },
+    {
+        type = 'bool-setting',
+        name = 'lbf-drain-trash',
+        setting_type = 'runtime-per-user',
+        default_value = false,
+        order = 'b[feed]-c',
+    },
+    {
+        type = 'bool-setting',
+        name = 'lbf-rebalance',
+        setting_type = 'runtime-per-user',
+        default_value = false,
+        order = 'b[feed]-d',
+    },
+    {
+        type = 'bool-setting',
+        name = 'lbf-take-chests',
+        setting_type = 'runtime-per-user',
+        default_value = false,
+        order = 'c[collect]-a',
+    },
+    {
+        type = 'bool-setting',
+        name = 'lbf-pickup-ground',
+        setting_type = 'runtime-per-user',
+        default_value = false,
+        order = 'c[collect]-b',
     },
     {
         type = 'int-setting',
@@ -72,49 +111,7 @@ data:extend({
         default_value = 16,
         minimum_value = 1,
         maximum_value = 100,
-        order = 'a',
-    },
-    {
-        type = 'bool-setting',
-        name = 'lbf-feed-fuel',
-        setting_type = 'runtime-per-user',
-        default_value = true,
-        order = 'b',
-    },
-    {
-        type = 'bool-setting',
-        name = 'lbf-feed-ingredients',
-        setting_type = 'runtime-per-user',
-        default_value = true,
-        order = 'c',
-    },
-    {
-        type = 'bool-setting',
-        name = 'lbf-take-chests',
-        setting_type = 'runtime-per-user',
-        default_value = false,
-        order = 'd',
-    },
-    {
-        type = 'bool-setting',
-        name = 'lbf-pickup-ground',
-        setting_type = 'runtime-per-user',
-        default_value = false,
-        order = 'e',
-    },
-    {
-        type = 'bool-setting',
-        name = 'lbf-drain-trash',
-        setting_type = 'runtime-per-user',
-        default_value = false,
-        order = 'f',
-    },
-    {
-        type = 'bool-setting',
-        name = 'lbf-show-summary',
-        setting_type = 'runtime-per-user',
-        default_value = false,
-        order = 'g',
+        order = 'd[appearance]-a',
     },
     {
         type = 'string-setting',
@@ -122,14 +119,14 @@ data:extend({
         setting_type = 'runtime-per-user',
         default_value = 'circle',
         allowed_values = { 'circle', 'square' },
-        order = 'h',
+        order = 'd[appearance]-b',
     },
     {
         type = 'bool-setting',
         name = 'lbf-fill-area',
         setting_type = 'runtime-per-user',
         default_value = true,
-        order = 'i',
+        order = 'd[appearance]-c',
     },
     {
         type = 'int-setting',
@@ -138,41 +135,41 @@ data:extend({
         default_value = 8,
         minimum_value = 2,
         maximum_value = 50,
-        order = 'j',
+        order = 'd[appearance]-d',
     },
     {
         type = 'bool-setting',
         name = 'lbf-use-my-color',
         setting_type = 'runtime-per-user',
         default_value = true,
-        order = 'k',
+        order = 'd[appearance]-e',
     },
     {
         type = 'color-setting',
         name = 'lbf-color',
         setting_type = 'runtime-per-user',
         default_value = { r = 1, g = 0.5, b = 0, a = 1 },
-        order = 'l',
+        order = 'd[appearance]-f',
     },
     {
         type = 'bool-setting',
         name = 'lbf-show-to-others',
         setting_type = 'runtime-per-user',
         default_value = false,
-        order = 'm',
-    },
-    {
-        type = 'bool-setting',
-        name = 'lbf-rebalance',
-        setting_type = 'runtime-per-user',
-        default_value = false,
-        order = 'n',
+        order = 'd[appearance]-g',
     },
     {
         type = 'bool-setting',
         name = 'lbf-show-starvation',
         setting_type = 'runtime-per-user',
         default_value = false,
-        order = 'o',
+        order = 'd[appearance]-h',
+    },
+    {
+        type = 'bool-setting',
+        name = 'lbf-show-summary',
+        setting_type = 'runtime-per-user',
+        default_value = false,
+        order = 'd[appearance]-i',
     },
 })

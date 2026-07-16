@@ -63,3 +63,27 @@ data:extend({
         stack_size = 1,
     },
 })
+
+-- Family icons prefixed onto mod-setting-name locale strings (settings.lua's
+-- `order` groups settings by these same families) so the settings screen
+-- shows at a glance which relative-GUI area each setting belongs to. Plain
+-- standalone 'sprite' prototypes, referenced as [img=lbf-family-<x>] — the
+-- singleton 'utility-sprites' prototype isn't extendable with arbitrary keys,
+-- unlike ordinary sprites (github.com/RedRafe/speed-run-community's
+-- prototypes/sprites.lua uses the same pattern).
+-- 'behavior' isn't a settings-tree family — it's the relative-GUI Behavior
+-- section title icon, a feed/collect mashup (see make_family_icons.py) since
+-- that section covers both channels at once.
+local family_icons = { 'feed', 'collect', 'appearance', 'watchdog', 'other', 'filters', 'behavior' }
+for _, family in pairs(family_icons) do
+    data:extend({
+        {
+            type = 'sprite',
+            name = 'lbf-family-' .. family,
+            filename = '__lazy-bastards-friend__/graphics/icons/family/lbf-family-' .. family .. '.png',
+            size = 32,
+            scale = 0.5,
+            flags = { 'icon' },
+        },
+    })
+end

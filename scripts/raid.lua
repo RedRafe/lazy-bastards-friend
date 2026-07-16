@@ -318,7 +318,7 @@ local function get_rivals(player, pending)
                         y = oy,
                         radius = other_radius,
                         square = other_data.shape == 'square',
-                        chests = other_data.flags.chests,
+                        chests = State.effective(index, 'collect_chests'),
                     }
                 end
             end
@@ -1120,7 +1120,7 @@ local function flush_report(player, surface, data, report)
         stats.on_flow('lbf-items-moved', -fed_total)
     end
 
-    if not data.flags.summary then
+    if not data.summary_enabled then
         return
     end
     local summary = data.summary
@@ -1181,19 +1181,17 @@ function Raid.service(player, pending)
         return
     end
 
-    local flags = data.flags
     local collect = State.effective(player.index, 'collect')
-    local feed = State.effective(player.index, 'feed')
     local combat = State.effective(player.index, 'combat')
-    local feed_fuel = feed and flags.fuel
-    local feed_ingredients = feed and flags.ingredients
-    local rebalance = feed and flags.rebalance
-    local starvation = feed and flags.starvation
-    local take_chests = collect and flags.chests and settings.global['lbf-allow-chest-take'].value == true
+    local feed_fuel = State.effective(player.index, 'feed_fuel')
+    local feed_ingredients = State.effective(player.index, 'feed_ingredients')
+    local rebalance = State.effective(player.index, 'feed_rebalance')
+    local starvation = State.effective(player.index, 'appearance_starvation')
+    local take_chests = State.effective(player.index, 'collect_chests') and settings.global['lbf-allow-chest-take'].value == true
     -- Chest-take wins over trash drain: draining trash into a chest we raid
     -- back next cycle would churn items in a loop (auto-trash re-trashes them).
-    local drain_trash = feed and flags.trash and not take_chests
-    local take_ground = collect and flags.ground
+    local drain_trash = State.effective(player.index, 'feed_trash') and not take_chests
+    local take_ground = State.effective(player.index, 'collect_ground')
 
     if not (collect or feed_fuel or feed_ingredients or combat or drain_trash or rebalance) then
         return

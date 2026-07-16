@@ -42,7 +42,7 @@ function Rendering.refresh(player)
 
     -- fill=false hides the area entirely (edge included); opacity is kept for
     -- when it's re-enabled.
-    if not player.connected or not data.fill or not State.any_effective(player.index) then
+    if not player.connected or not State.effective(player.index, 'appearance_fill') or not State.any_effective(player.index) then
         return
     end
     local anchor = player.character
@@ -53,7 +53,7 @@ function Rendering.refresh(player)
     local radius = State.get_radius(player.index)
     local surface = anchor.surface
     local players = nil -- visible to everyone
-    if not data.flags.show_others then
+    if not State.effective(player.index, 'appearance_show_others') then
         players = { player.index }
     end
 

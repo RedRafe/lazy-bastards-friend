@@ -24,23 +24,51 @@ local function check_player(player_index)
     return player
 end
 
---- @param channels table<LbfChannel, boolean>
+--- @param global table<string, {enabled: boolean}>
 --- @return table<LbfChannel, boolean>
-local function copy_channels(channels)
-    return { collect = channels.collect, feed = channels.feed, combat = channels.combat }
+local function channel_global_map(global)
+    local map = {}
+    for _, channel in pairs(State.channels) do
+        map[channel] = global[channel].enabled
+    end
+    return map
 end
 
--- Behavior flags exposed through set_player_flag / get_player_state.
+--- @param player_settings table<string, {enabled: boolean, allowed: boolean}>
+--- @return table<LbfChannel, boolean>
+local function channel_enabled_map(player_settings)
+    local map = {}
+    for _, channel in pairs(State.channels) do
+        map[channel] = player_settings[channel].enabled
+    end
+    return map
+end
+
+--- @param player_settings table<string, {enabled: boolean, allowed: boolean}>
+--- @return table<LbfChannel, boolean>
+local function channel_locked_map(player_settings)
+    local map = {}
+    for _, channel in pairs(State.channels) do
+        map[channel] = not player_settings[channel].allowed
+    end
+    return map
+end
+
+-- Behavior/appearance flags exposed through set_player_flag / get_player_state.
+-- Names match the settings-tree node ids (state.lua's TREE_DEF) one-to-one,
+-- except 'summary' which isn't a tree node (DESIGN.md §12).
+-- BREAKING (2026-07-16): renamed from the flat 'fuel'/'chests'/... names to
+-- match the tree's family-prefixed ids — see changelog.txt / docs/API.md.
 local FLAG_NAMES = {
-    fuel = true,
-    ingredients = true,
-    chests = true,
-    ground = true,
-    trash = true,
+    feed_fuel = true,
+    feed_ingredients = true,
+    collect_chests = true,
+    collect_ground = true,
+    feed_trash = true,
     summary = true,
-    show_others = true,
-    rebalance = true,
-    starvation = true,
+    appearance_show_others = true,
+    feed_rebalance = true,
+    appearance_starvation = true,
 }
 
 --- @param flag any
@@ -74,7 +102,7 @@ remote.add_interface('lazy-bastards-friend', {
     --- @param channel LbfChannel
     --- @return boolean
     get_active = function(channel)
-        return storage.active[check_channel(channel)]
+        return storage.settings[check_channel(channel)].enabled
     end,
 
     --- Admin lock: while locked the channel is off for that player regardless
@@ -124,12 +152,16 @@ remote.add_interface('lazy-bastards-friend', {
         end
         local flags = {}
         for name in pairs(FLAG_NAMES) do
-            flags[name] = data.flags[name] == true
+            if name == 'summary' then
+                flags[name] = data.summary_enabled == true
+            else
+                flags[name] = data.settings[name].enabled == true
+            end
         end
         return {
-            enabled = copy_channels(data.enabled),
-            locked = copy_channels(data.locked),
-            locked_master = data.locked_master == true,
+            enabled = channel_enabled_map(data.settings),
+            locked = channel_locked_map(data.settings),
+            locked_master = not data.settings.mod.allowed,
             effective = effective,
             radius = State.get_radius(player.index),
             shape = data.shape,
@@ -145,8 +177,12 @@ remote.add_interface('lazy-bastards-friend', {
     set_player_flag = function(player_index, flag, value)
         local player = check_player(player_index)
         check_flag(flag)
-        State.get_player_data(player.index).flags[flag] = value == true
-        State.push_setting(player, State.flag_setting[flag])
+        if flag == 'summary' then
+            State.get_player_data(player.index).summary_enabled = value == true
+            State.push_setting(player, 'lbf-show-summary')
+        else
+            State.set_enabled(player, flag, value == true)
+        end
         State.refresh(player)
     end,
 
@@ -165,8 +201,8 @@ remote.add_interface('lazy-bastards-friend', {
     --- @return table see docs/API.md
     get_state = function()
         return {
-            master = storage.master ~= false,
-            active = copy_channels(storage.active),
+            master = storage.settings.mod.enabled ~= false,
+            active = channel_global_map(storage.settings),
             auto_disabled = storage.auto_disabled == true,
             watchdog = Watchdog.status(),
             spm_threshold = settings.global['lbf-spm-threshold'].value,

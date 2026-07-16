@@ -44,8 +44,8 @@ Event.add(defines.events.on_player_created, function(event)
     if not player then
         return
     end
-    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'trash', true)
-    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'ground', true)
+    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'feed_trash', true)
+    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'collect_ground', true)
 
     Harness.eventually('ground items were picked up', function()
         return player.get_main_inventory().get_item_count('iron-plate') > 0

@@ -36,7 +36,7 @@ Event.add(defines.events.on_player_created, function(event)
     if not player then
         return
     end
-    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'chests', true)
+    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'collect_chests', true)
     Harness.eventually('chest contents were collected once the flag is on', function()
         return player.get_main_inventory().get_item_count('coal') > 0
     end, 3600)

@@ -205,7 +205,7 @@ on(defines.events.on_runtime_mod_setting_changed, function(event)
         State.refresh_all() -- grey out / restore the per-player chest checkbox
     elseif setting == 'lbf-update-period' then
         Scheduler.rebuild() -- recompute the nth-tick interval
-    elseif setting == 'lbf-watchdog-enabled' or setting == 'lbf-watchdog-stops-combat' or setting == 'lbf-spm-threshold' then
+    elseif setting == 'lbf-watchdog-enabled' or setting == 'lbf-spm-threshold' then
         if setting == 'lbf-watchdog-enabled' and settings.global[setting].value == true then
             -- Turning the watchdog on (settings screen or admin switch) un-trips
             -- it — the only re-arm path; re-enabling masters no longer is (§2.1).

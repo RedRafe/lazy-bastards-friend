@@ -39,7 +39,7 @@ Event.add(defines.events.on_player_created, function(event)
     if not player then
         return
     end
-    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'starvation', true)
+    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'appearance_starvation', true)
     remote.call('lazy-bastards-friend', 'set_player_reserve', player.index, 'coal', RESERVE)
 
     Harness.watch('starved furnace never gets fueled (nothing spareable)', function()

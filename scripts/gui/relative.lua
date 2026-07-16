@@ -1,6 +1,6 @@
 --- Per-player settings panel, anchored to the character screen (DESIGN.md §4.2).
 --- Starts collapsed to a single blue icon button that opens the panel; once
---- opened, the On/Off switch (the per-player master, data.master) sits at the
+--- opened, the On/Off switch (the per-player master, data.settings.mod) sits at the
 --- top and content is split into three collapsible sections — Behavior (a
 --- Feed row and a Take row, each with an advanced-options expander),
 --- Appearance (radius, area visuals and all feedback toggles) and Reserved
@@ -32,28 +32,24 @@ local ANCHOR = {
 
 -- The two user-facing behavior rows. Each is a channel checkbox ("Feed
 -- machines" / "Collect from machines") plus an advanced-options expander
--- (ui.sections[id]) revealing the fine-grained flags; Feed's advanced list
--- also hosts the combat channel ("Feed turrets") — a channel in the
--- implementation, but "something I feed" to the player.
+-- (ui.sections[id]) listing tree node ids (`advanced`) to render inside it.
+-- 'combat' ("Feed turrets") is a true tree child of 'feed' now (DESIGN.md
+-- §12, 2026-07-16 — turret feeding always stops when Feed does) as well as
+-- its GUI placement here. 'starvation' moved to the Appearance section below
+-- — it's a tree child of 'appearance', not 'feed', so admins can lock it
+-- independently even though raid.lua only ever populates it during a feed pass.
 local BEHAVIOR_GROUPS = {
     {
         id = 'feed',
         channel = 'feed',
-        advanced = { { flag = 'fuel' }, { flag = 'ingredients' }, { channel = 'combat' }, { flag = 'trash' }, { flag = 'rebalance' } },
+        advanced = { 'feed_fuel', 'feed_ingredients', 'combat', 'feed_trash', 'feed_rebalance' },
     },
     {
         id = 'take',
         channel = 'collect',
-        advanced = { { flag = 'chests' }, { flag = 'ground' } },
+        advanced = { 'collect_chests', 'collect_ground' },
     },
 }
-
--- Feedback flags shown at the bottom of the Appearance section ("show my
--- area to everyone" is there too, but has its own caption/tooltip keys).
-local APPEARANCE_FLAGS = { 'starvation', 'summary' }
-
--- Per-player mod setting each behavior flag mirrors (State.push_setting, §8).
-local FLAG_SETTING = State.flag_setting
 
 -- Logistic group prefix whose minimum values the import button copies into reserves (§6).
 -- Matched case-insensitively as "lbf::<player-name>"; a matching group is renamed to the
@@ -104,29 +100,48 @@ local function add_master_switch(parent)
     })
 end
 
---- @param parent LuaGuiElement
---- @param channel LbfChannel
---- @return LuaGuiElement
-local function add_channel_checkbox(parent, channel)
-    return parent.add({
-        type = 'checkbox',
-        name = 'lbf-channel-' .. channel,
-        caption = { 'lbf-gui.channel-' .. channel },
-        state = true,
-        tags = { lbf_action = 'toggle-channel', channel = channel },
-    })
+-- Channel nodes keep their original locale key prefix ('channel-'); every
+-- other tree node (behavior/appearance flags) uses 'flag-'.
+local CHANNEL_IDS = { collect = true, feed = true, combat = true }
+
+-- Behavior/appearance flag ids carry a family prefix (feed_/collect_/
+-- appearance_ — see state.lua's TREE_DEF; also the public remote-API flag
+-- names). Locale keys predate that prefix, so strip it back off before
+-- building 'lbf-gui.flag-<...>' — e.g. 'feed_fuel' -> 'lbf-gui.flag-fuel'.
+local FAMILY_PREFIXES = { 'feed_', 'collect_', 'appearance_' }
+
+--- @param id string tree node id
+--- @return string unprefixed locale-key suffix
+local function locale_suffix(id)
+    for _, prefix in pairs(FAMILY_PREFIXES) do
+        if id:sub(1, #prefix) == prefix then
+            return id:sub(#prefix + 1)
+        end
+    end
+    return id
 end
 
+-- 'appearance_fill'/'appearance_show_others' predate the settings tree and
+-- keep their own locale keys (built alongside their sliders/extra tooltips)
+-- rather than the generic 'flag-<suffix>-tooltip' pattern.
+local TOOLTIP_OVERRIDE = {
+    appearance_fill = 'lbf-gui.fill-tooltip',
+    appearance_show_others = 'lbf-gui.show-others-tooltip',
+}
+
+--- One checkbox per settings-tree node id — channels and flags alike; state/
+--- greying/tooltip are filled in by sync_toggle_checkbox.
 --- @param parent LuaGuiElement
---- @param flag string
+--- @param id string tree node id
 --- @return LuaGuiElement
-local function add_flag_checkbox(parent, flag)
+local function add_toggle_checkbox(parent, id, sprite_prefix)
+    local prefix = CHANNEL_IDS[id] and 'channel-' or 'flag-'
     return parent.add({
         type = 'checkbox',
-        name = 'lbf-flag-' .. flag,
-        caption = { 'lbf-gui.flag-' .. flag },
+        name = 'lbf-setting-' .. id,
+        caption = {'', (sprite_prefix or ''), { 'lbf-gui.' .. prefix .. locale_suffix(id) }},
         state = false,
-        tags = { lbf_action = 'toggle-flag', flag = flag },
+        tags = { lbf_action = 'toggle-setting', id = id },
     })
 end
 
@@ -192,10 +207,10 @@ function Gui.build(player)
         tags = { lbf_admin_action = 'toggle' },
     })
 
-    local behavior_body = add_section(content, 'behavior', { 'lbf-gui.behavior' })
+    local behavior_body = add_section(content, 'behavior', { '', '[img=lbf-family-behavior]  ', { 'lbf-gui.behavior' } })
     for _, group in pairs(BEHAVIOR_GROUPS) do
         local row = behavior_body.add({ type = 'flow', name = group.id .. '-row', direction = 'horizontal', style = 'lbf_row_flow' })
-        add_channel_checkbox(row, group.channel)
+        add_toggle_checkbox(row, group.channel, string.format('[img=lbf-family-%s] ', group.channel))
         GuiUtil.add_pusher(row)
         row.add({
             type = 'sprite-button',
@@ -206,16 +221,12 @@ function Gui.build(player)
             tags = { lbf_action = 'toggle-section', section = group.id },
         })
         local advanced = behavior_body.add({ type = 'flow', name = group.id .. '-advanced', direction = 'vertical', style = 'lbf_indented_flow' })
-        for _, entry in pairs(group.advanced) do
-            if entry.flag then
-                add_flag_checkbox(advanced, entry.flag)
-            else
-                add_channel_checkbox(advanced, entry.channel)
-            end
+        for _, id in pairs(group.advanced) do
+            add_toggle_checkbox(advanced, id)
         end
     end
 
-    local appearance_body = add_section(content, 'appearance', { 'lbf-gui.appearance' })
+    local appearance_body = add_section(content, 'appearance', { '', '[img=lbf-family-appearance]  ', { 'lbf-gui.appearance' } })
 
     local radius_flow = appearance_body.add({ type = 'flow', name = 'radius-flow', direction = 'horizontal', style = 'lbf_row_flow' })
     radius_flow.add({ type = 'label', name = 'radius-label', caption = { 'lbf-gui.radius' }, tooltip = { 'lbf-gui.radius-tooltip' } })
@@ -247,7 +258,7 @@ function Gui.build(player)
         caption = { 'lbf-gui.fill' },
         tooltip = { 'lbf-gui.fill-tooltip' },
         state = true,
-        tags = { lbf_action = 'fill' },
+        tags = { lbf_action = 'toggle-setting', id = 'appearance_fill' },
     })
     fill_flow.add({
         type = 'slider',
@@ -296,16 +307,26 @@ function Gui.build(player)
 
     appearance_body.add({
         type = 'checkbox',
-        name = 'lbf-flag-show_others',
+        name = 'lbf-show-others',
         caption = { 'lbf-gui.show-others' },
         tooltip = { 'lbf-gui.show-others-tooltip' },
         state = false,
-        tags = { lbf_action = 'toggle-flag', flag = 'show_others' },
+        tags = { lbf_action = 'toggle-setting', id = 'appearance_show_others' },
     })
-    add_flag_checkbox(appearance_body, 'starvation')
-    add_flag_checkbox(appearance_body, 'summary')
+    add_toggle_checkbox(appearance_body, 'appearance_starvation')
+    -- Not a tree node: nothing gates the flying-text summary, it's a plain
+    -- per-player preference (DESIGN.md §12).
+    appearance_body.add({
+        type = 'checkbox',
+        name = 'lbf-summary',
+        caption = { 'lbf-gui.flag-summary' },
+        tooltip = { 'lbf-gui.flag-summary-tooltip' },
+        state = false,
+        tags = { lbf_action = 'toggle-summary' },
+    })
 
-    local reserves_body = add_section(content, 'reserves', { 'lbf-gui.reserves' }, { 'lbf-gui.reserves-tooltip' })
+    local reserves_body =
+        add_section(content, 'reserves', { '', '[img=lbf-family-filters]  ', { 'lbf-gui.reserves' } }, { 'lbf-gui.reserves-tooltip' })
 
     -- The pane hugs the grid's width; pushers on both sides center it in the body.
     local pane_row = reserves_body.add({ type = 'flow', name = 'reserves-pane-row', direction = 'horizontal' })
@@ -531,29 +552,29 @@ local function confirm_reserve_editor(player, data, editor)
     State.refresh(player)
 end
 
+--- One sync routine for every settings-tree node's checkbox (channels and
+--- flags alike): state from the player's own preference, greyed out with a
+--- "why" tooltip only when an admin-side control (global switch or lock,
+--- anywhere from the root down to this node) blocks it — the player's own
+--- ancestor toggles never grey their own children (DESIGN.md §2).
 --- @param checkbox LuaGuiElement
 --- @param data LbfPlayerData
---- @param channel LbfChannel
-local function sync_channel_checkbox(checkbox, data, channel)
-    checkbox.state = data.enabled[channel]
-    if not (storage.master and storage.active[channel]) then
+--- @param id string tree node id
+local function sync_toggle_checkbox(checkbox, data, id)
+    checkbox.state = data.settings[id].enabled
+    local _, reason = State.tree:admin_blocked(storage.settings, data.settings, id)
+    if reason then
         checkbox.enabled = false
-        checkbox.tooltip = { 'lbf-gui.master-off' }
-    elseif data.locked_master or data.locked[channel] then
-        checkbox.enabled = false
-        checkbox.tooltip = { 'lbf-gui.locked-by-admin' }
+        checkbox.tooltip = reason == 'global' and { 'lbf-gui.master-off' } or { 'lbf-gui.locked-by-admin' }
     else
         checkbox.enabled = true
-        checkbox.tooltip = { 'lbf-gui.channel-' .. channel .. '-tooltip' }
+        if TOOLTIP_OVERRIDE[id] then
+            checkbox.tooltip = { TOOLTIP_OVERRIDE[id] }
+        else
+            local prefix = CHANNEL_IDS[id] and 'channel-' or 'flag-'
+            checkbox.tooltip = { 'lbf-gui.' .. prefix .. locale_suffix(id) .. '-tooltip' }
+        end
     end
-end
-
---- @param checkbox LuaGuiElement
---- @param flags table<string, boolean>
---- @param flag string
-local function sync_flag_checkbox(checkbox, flags, flag)
-    checkbox.state = flags[flag] == true
-    checkbox.tooltip = { 'lbf-gui.flag-' .. flag .. '-tooltip' }
 end
 
 --- Push storage state into the panel: master switch, checkbox states,
@@ -572,12 +593,14 @@ function Gui.sync(player)
     if not content then
         return -- stale pre-M6 schema; ensure() rebuilds on next join
     end
-    local flags = data.flags
-
     local master_switch = content['master-flow']['lbf-master']
-    master_switch.switch_state = data.master and 'right' or 'left'
-    master_switch.enabled = not data.locked_master
-    master_switch.tooltip = data.locked_master and { 'lbf-gui.locked-by-admin' } or { 'lbf-gui.master-switch-tooltip' }
+    local _, master_blocked_reason = State.tree:admin_blocked(storage.settings, data.settings, 'mod')
+    local mod = data.settings.mod
+    master_switch.switch_state = mod.enabled and 'right' or 'left'
+    master_switch.enabled = master_blocked_reason == nil
+    master_switch.tooltip = master_blocked_reason == nil and { 'lbf-gui.master-switch-tooltip' }
+        or master_blocked_reason == 'global' and { 'lbf-gui.master-off' }
+        or { 'lbf-gui.locked-by-admin' }
 
     for _, id in pairs(TOP_SECTIONS) do
         local section = section_frame(content, id)
@@ -589,26 +612,20 @@ function Gui.sync(player)
     local behavior_body = section_frame(content, 'behavior').body
     for _, group in pairs(BEHAVIOR_GROUPS) do
         local row = behavior_body[group.id .. '-row']
-        sync_channel_checkbox(row['lbf-channel-' .. group.channel], data, group.channel)
+        sync_toggle_checkbox(row['lbf-setting-' .. group.channel], data, group.channel)
         local advanced = behavior_body[group.id .. '-advanced']
         local expanded = data.ui.sections[group.id]
         row['arrow'].sprite = expanded and 'utility/collapse' or 'utility/expand'
         advanced.visible = expanded
-        for _, entry in pairs(group.advanced) do
-            if entry.flag then
-                sync_flag_checkbox(advanced['lbf-flag-' .. entry.flag], flags, entry.flag)
-            else
-                sync_channel_checkbox(advanced['lbf-channel-' .. entry.channel], data, entry.channel)
-            end
+        for _, id in pairs(group.advanced) do
+            sync_toggle_checkbox(advanced['lbf-setting-' .. id], data, id)
         end
     end
     local take_advanced = behavior_body['take-advanced']
     if settings.global['lbf-allow-chest-take'].value ~= true then
-        local chests = take_advanced['lbf-flag-chests']
+        local chests = take_advanced['lbf-setting-collect_chests']
         chests.enabled = false
         chests.tooltip = { 'lbf-gui.flag-chests-forbidden' }
-    else
-        take_advanced['lbf-flag-chests'].enabled = true
     end
 
     content['master-flow']['lbf-admin-open'].visible = player.admin
@@ -624,9 +641,9 @@ function Gui.sync(player)
 
     appearance_body['shape-flow']['lbf-shape'].selected_index = data.shape == 'square' and 2 or 1
     local fill_flow = appearance_body['fill-flow']
-    fill_flow['lbf-fill'].state = data.fill
+    sync_toggle_checkbox(fill_flow['lbf-fill'], data, 'appearance_fill')
     fill_flow['lbf-opacity'].slider_value = math.floor(data.opacity * 100 + 0.5)
-    fill_flow['lbf-opacity'].enabled = data.fill
+    fill_flow['lbf-opacity'].enabled = data.settings.appearance_fill.enabled
     appearance_body['lbf-use-player-color'].state = data.use_player_color
     local color_flow = appearance_body['color-flow']
     color_flow.visible = not data.use_player_color
@@ -636,10 +653,9 @@ function Gui.sync(player)
         row['lbf-color-' .. component].slider_value = value
         row['lbf-color-value-' .. component].text = tostring(value)
     end
-    appearance_body['lbf-flag-show_others'].state = flags.show_others == true
-    for _, flag in pairs(APPEARANCE_FLAGS) do
-        sync_flag_checkbox(appearance_body['lbf-flag-' .. flag], flags, flag)
-    end
+    sync_toggle_checkbox(appearance_body['lbf-show-others'], data, 'appearance_show_others')
+    sync_toggle_checkbox(appearance_body['lbf-setting-appearance_starvation'], data, 'appearance_starvation')
+    appearance_body['lbf-summary'].state = data.summary_enabled
 
     sync_reserves(section_frame(content, 'reserves').body['reserves-pane-row']['reserves-pane']['lbf-reserves'], data.reserves)
 end
@@ -706,24 +722,19 @@ function Gui.dispatch(event)
     elseif action == 'master-switch' then
         State.set_player_master(player, element.switch_state == 'right')
         State.refresh(player)
-    elseif action == 'toggle-channel' then
-        State.set_player_enabled(player, tags.channel --[[@as LbfChannel]], element.state)
+    elseif action == 'toggle-setting' then
+        State.set_enabled(player, tags.id --[[@as string]], element.state)
+        State.refresh(player)
+    elseif action == 'toggle-summary' then
+        data.summary_enabled = element.state
+        State.push_setting(player, 'lbf-show-summary')
         State.refresh(player)
     elseif action == 'radius-slider' then
         State.set_radius(player, element.slider_value)
         State.refresh(player)
-    elseif action == 'toggle-flag' then
-        local flag = tags.flag --[[@as string]]
-        data.flags[flag] = element.state
-        State.push_setting(player, FLAG_SETTING[flag])
-        State.refresh(player)
     elseif action == 'shape' then
         data.shape = element.selected_index == 2 and 'square' or 'circle'
         State.push_setting(player, 'lbf-shape')
-        State.refresh(player)
-    elseif action == 'fill' then
-        data.fill = element.state
-        State.push_setting(player, 'lbf-fill-area')
         State.refresh(player)
     elseif action == 'opacity' then
         data.opacity = element.slider_value / 100
