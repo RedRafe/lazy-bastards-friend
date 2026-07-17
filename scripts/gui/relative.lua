@@ -28,7 +28,7 @@ local set_style = GuiUtil.set_style
 local Gui = {}
 
 -- Bump to force a destroy+rebuild of every player's panel on join/config change.
-local GUI_VERSION = 1
+local GUI_VERSION = 0
 
 local FRAME_NAME = 'lbf-relative'
 
@@ -47,7 +47,7 @@ local ANCHOR = {
 -- section). Each is one strip of sprite-buttons: the channel's own master
 -- button ("Feed machines" / "Collect from machines") followed by its child
 -- flag buttons (tree node ids, `flags`) in the same row — no separate
--- advanced-options expander anymore. 'combat' ("Feed turrets") is a true
+-- advanced-options expander anymore. 'feed_combat' ("Feed turrets") is a true
 -- tree child of 'feed' (DESIGN.md §1/§12) with no admin lock/master of its
 -- own — a plain preference like feed_fuel, just placed here in Feed's flag
 -- list. 'starvation'/'show-others' live in the Appearance section below —
@@ -58,7 +58,7 @@ local BEHAVIOR_GROUPS = {
     {
         id = 'feed',
         channel = 'feed',
-        flags = { 'feed_fuel', 'feed_ingredients', 'combat', 'feed_trash', 'feed_rebalance' },
+        flags = { 'feed_fuel', 'feed_ingredients', 'feed_combat', 'feed_trash', 'feed_rebalance' },
     },
     {
         id = 'collect',
@@ -143,26 +143,36 @@ end
 local FLAG_SPRITE_SUFFIX = {
     feed_fuel = 'fuel',
     feed_ingredients = 'ingredients',
-    combat = 'combat',
+    feed_combat = 'combat',
     feed_trash = 'trash',
     feed_rebalance = 'rebalance',
     collect_chests = 'chests',
     collect_ground = 'ground',
     appearance_show_others_area = 'show-others',
     appearance_starvation = 'starvation',
+    appearance_use_player_color = 'use-player-color',
+    appearance_summary = 'summary',
 }
 
 -- 'appearance' (formerly 'appearance_fill')/'appearance_show_others_area'
 -- predate the settings tree and keep their own locale keys (built alongside
 -- their sliders/extra tooltips) rather than the generic 'channel-'/
--- 'flag-<suffix>' patterns.
+-- 'flag-<suffix>' patterns. 'appearance_use_player_color' joined them
+-- (2026-07-17): its existing locale keys are hyphenated
+-- (`flag-use-player-color`) while locale_suffix's family-prefix strip would
+-- derive the underscored `flag-use_player_color` — same reason
+-- 'appearance_show_others_area' needed an override. 'appearance_summary'
+-- needed no override: locale_suffix strips 'appearance_' down to 'summary',
+-- which already matches its pre-existing `flag-summary` key exactly.
 local CAPTION_OVERRIDE = {
     appearance = 'lbf-gui.fill',
     appearance_show_others_area = 'lbf-gui.show-others',
+    appearance_use_player_color = 'lbf-gui.flag-use-player-color',
 }
 local TOOLTIP_OVERRIDE = {
     appearance = 'lbf-gui.fill-tooltip',
     appearance_show_others_area = 'lbf-gui.show-others-tooltip',
+    appearance_use_player_color = 'lbf-gui.flag-use-player-color-tooltip',
 }
 
 --- Builds a tooltip in the admin-open panel's format (relative.lua's
@@ -314,40 +324,6 @@ local function sync_flag_button(button, data, id, player_index)
     button.tooltip = flag_tooltip(title_key, desc_key, reason)
 end
 
---- Sprite-button + tooltip for a plain (non-tree, never admin-locked)
---- preference toggle — use-player-color and the flying-text summary today.
---- Same vanilla shortcut-bar look/size as add_flag_button. Tooltip's title/desc
---- keys are stashed in tags so sync_plain_flag_button can rebuild the tooltip
---- (with the parent-off warning line) without the caller having to repeat them.
---- @param parent LuaGuiElement
---- @param name string element name
---- @param action string tags.lbf_action
---- @param sprite string
---- @param title_key string
---- @param desc_key string
---- @return LuaGuiElement
-local function add_plain_flag_button(parent, name, action, sprite, title_key, desc_key)
-    local button = parent.add({
-        type = 'sprite-button',
-        name = name,
-        style = 'shortcut_bar_button',
-        sprite = sprite,
-        tags = { lbf_action = action, title_key = title_key, desc_key = desc_key },
-    })
-    button.tooltip = flag_tooltip(title_key, desc_key)
-    return button
-end
-
---- These are children of 'appearance' too (not tree nodes, so never
---- admin-locked), so they still grey and warn when the channel above them is
---- off (2026-07-17) — same rule as the tree-backed flag buttons.
---- @param button LuaGuiElement
---- @param on boolean
---- @param locked boolean? true when the appearance channel above it is off
-local function sync_plain_flag_button(button, on, locked)
-    button.toggled = on
-    button.tooltip = flag_tooltip(button.tags.title_key --[[@as string]], button.tags.desc_key --[[@as string]], locked and 'parent' or nil)
-end
 
 --- @param player LuaPlayer
 function Gui.build(player)
@@ -461,10 +437,12 @@ function Gui.build(player)
         tags = { lbf_action = 'opacity' },
     })
 
-    -- The five Appearance toggles as one strip: shape cycles circle/square;
-    -- use-player-color and summary are plain per-player prefs
-    -- (add_plain_flag_button); show-others and starvation are tree children
-    -- of 'appearance' (add_flag_button), admin-lockable independently.
+    -- The five Appearance toggles as one strip: shape cycles circle/square
+    -- (still a plain preference — an enum, not a boolean, doesn't fit a tree
+    -- node); the other four are all tree children of 'appearance'
+    -- (add_flag_button), admin-lockable independently (2026-07-17: promoted
+    -- use-player-color and summary to match show-others/starvation — see
+    -- state.lua's TREE_DEF comment and DESIGN.md §12).
     local flags_row = appearance_settings.add({ type = 'flow', name = 'flags-row', direction = 'horizontal' })
     local flags_panel = add_shortcut_panel(flags_row, 'shortcut')
     flags_panel.add({
@@ -474,18 +452,10 @@ function Gui.build(player)
         sprite = SHAPE_SPRITE.circle,
         tags = { lbf_action = 'shape' },
     })
-    add_plain_flag_button(
-        flags_panel, 'lbf-use-player-color', 'use-player-color', 'lbf-flag-use-player-color',
-        'lbf-gui.flag-use-player-color', 'lbf-gui.flag-use-player-color-tooltip'
-    )
+    add_flag_button(flags_panel, 'appearance_use_player_color')
     add_flag_button(flags_panel, 'appearance_show_others_area')
     add_flag_button(flags_panel, 'appearance_starvation')
-    -- Not a tree node: nothing gates the flying-text summary, it's a plain
-    -- per-player preference (DESIGN.md §12).
-    add_plain_flag_button(
-        flags_panel, 'lbf-summary', 'toggle-summary', 'lbf-flag-summary',
-        'lbf-gui.flag-summary', 'lbf-gui.flag-summary-tooltip'
-    )
+    add_flag_button(flags_panel, 'appearance_summary')
 
     local color_flow = appearance_body.add({
         type = 'frame',
@@ -839,15 +809,13 @@ function Gui.sync(player)
     shape_button.sprite = SHAPE_SPRITE[data.shape]
     shape_button.tooltip = shape_tooltip(data.shape, not appearance_effective)
     shape_button.enabled = appearance_effective
-    sync_plain_flag_button(flags_panel['lbf-use-player-color'], data.use_player_color, not appearance_effective)
-    flags_panel['lbf-use-player-color'].enabled = appearance_effective
+    sync_flag_button(flags_panel['lbf-setting-appearance_use_player_color'], data, 'appearance_use_player_color', player.index)
     sync_flag_button(flags_panel['lbf-setting-appearance_show_others_area'], data, 'appearance_show_others_area', player.index)
     sync_flag_button(flags_panel['lbf-setting-appearance_starvation'], data, 'appearance_starvation', player.index)
-    sync_plain_flag_button(flags_panel['lbf-summary'], data.summary_enabled, not appearance_effective)
-    flags_panel['lbf-summary'].enabled = appearance_effective
+    sync_flag_button(flags_panel['lbf-setting-appearance_summary'], data, 'appearance_summary', player.index)
 
     local color_flow = appearance_body['color-flow']
-    color_flow.visible = not data.use_player_color
+    color_flow.visible = not data.settings.appearance_use_player_color.enabled
     for _, component in pairs(COLOR_COMPONENTS) do
         local row = color_flow['row-' .. component]
         local value = math.floor((data.color[component] or 0) * 255 + 0.5)
@@ -939,13 +907,6 @@ on_action('toggle-setting', function(_, _, tags, player)
     end
 end)
 
-on_action('toggle-summary', function(_, _, _, player)
-    local data = State.get_player_data(player.index)
-    data.summary_enabled = not data.summary_enabled
-    State.push_setting(player, 'lbf-show-summary')
-    State.refresh(player)
-end)
-
 on_action('radius-slider', function(_, element, _, player)
     State.set_radius(player, element.slider_value)
     State.refresh(player)
@@ -962,13 +923,6 @@ on_action('opacity', function(_, element, _, player)
     local data = State.get_player_data(player.index)
     data.opacity = element.slider_value / 100
     State.push_setting(player, 'lbf-opacity')
-    State.refresh(player)
-end)
-
-on_action('use-player-color', function(_, _, _, player)
-    local data = State.get_player_data(player.index)
-    data.use_player_color = not data.use_player_color
-    State.push_setting(player, 'lbf-use-my-color')
     State.refresh(player)
 end)
 

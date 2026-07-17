@@ -1099,7 +1099,10 @@ end
 --- @param surface LuaSurface where the transfers happened (the character's surface)
 --- @param data LbfPlayerData
 --- @param report LbfReport
-local function flush_report(player, surface, data, report)
+--- @param summary_effective boolean `appearance_summary`'s effective state — a
+---   tree child of `appearance` now (DESIGN.md §12), so an admin/parent-off
+---   silences the summary the same way it silences every other render
+local function flush_report(player, surface, data, report, summary_effective)
     local collected_total, fed_total = 0, 0
     for _, count in pairs(report.collected) do
         collected_total = collected_total + count
@@ -1120,7 +1123,7 @@ local function flush_report(player, surface, data, report)
         stats.on_flow('lbf-items-moved', -fed_total)
     end
 
-    if not data.summary_enabled then
+    if not summary_effective then
         return
     end
     local summary = data.summary
@@ -1182,7 +1185,7 @@ function Raid.service(player, pending)
     end
 
     local collect = State.effective(player.index, 'collect')
-    local combat = State.effective(player.index, 'combat')
+    local combat = State.effective(player.index, 'feed_combat')
     local feed_fuel = State.effective(player.index, 'feed_fuel')
     local feed_ingredients = State.effective(player.index, 'feed_ingredients')
     local rebalance = State.effective(player.index, 'feed_rebalance')
@@ -1230,7 +1233,7 @@ function Raid.service(player, pending)
     if starvation and (#starved > 0 or #saturated > 0) then
         Rendering.flash_starvation(player, starved, saturated)
     end
-    flush_report(player, anchor.surface, data, report)
+    flush_report(player, anchor.surface, data, report, State.effective(player.index, 'appearance_summary'))
 end
 
 return Raid

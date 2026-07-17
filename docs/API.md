@@ -17,9 +17,9 @@ arguments raise a Lua error with a `lazy-bastards-friend:` prefix — wrap in
   string name:
   - `'collect'` — pull finished products / burnt results (and opt-in chest
     contents) from machines into the player's inventory.
-  - `'feed'` — push fuel, ingredients and (via the `combat` flag, see below)
-    ammo from the player into machines/turrets (and opt-in, drain their trash
-    slots into chests).
+  - `'feed'` — push fuel, ingredients and (via the `feed_combat` flag, see
+    below) ammo from the player into machines/turrets (and opt-in, drain their
+    trash slots into chests).
   - `'appearance'` — gates every render the mod draws for a player: their own
     AoE area, other players' AoE areas they've opted into seeing, and
     starvation/saturation icons. Turning it off for someone hides all of it
@@ -30,14 +30,18 @@ arguments raise a Lua error with a `lazy-bastards-friend:` prefix — wrap in
     checkbox) still apply as before. It does no item movement of its own.
     Shown as **"Appearance"** in the admin GUI (internally `'renders'` for a
     few hours on 2026-07-16 before this rename — see DESIGN.md §12).
-  - **BREAKING (2026-07-16):** `'combat'` (turret ammo feeding) is **not** a
-    channel anymore — it's a plain per-player preference under `'feed'`, set
-    like any other behavior flag through `set_player_flag`/`get_player_state`
-    (see below), with no admin lock/global master of its own. It was already
-    "not independent of Feed" (turning Feed off, including the SPM watchdog
-    retiring it, always stopped turret-feeding too); this removes the
-    now-redundant admin-lock/master it kept alongside that dependency. Admins
-    gate it only indirectly, by locking/disabling Feed.
+  - **BREAKING (2026-07-16):** turret ammo feeding is **not** a channel
+    anymore — it's a plain `'feed'` behavior flag, set like any other one
+    through `set_player_flag`/`get_player_state` (see below), with no admin
+    lock/global master of its own. It follows Feed's rules exactly like
+    `feed_fuel`/`feed_ingredients` do: no independent lock, no independent
+    global master, and (like them) a mirrored `lbf-feed-combat` mod setting.
+    Turning `'feed'` off, including the SPM watchdog retiring it, always
+    stops turret-feeding too — there is no path to decouple them. Admins gate
+    it only indirectly, by locking/disabling Feed. **BREAKING (2026-07-17):**
+    the flag itself was renamed `'combat'` → `'feed_combat'` — it was the one
+    flag without its family's prefix, an oversight rather than a deliberate
+    exception (see DESIGN.md §12).
 - **Tri-state activation** — a channel actually runs for a player only if all
   of these are true: the global whole-mod switch is on (`set_global_master`),
   the channel's global master is on (`set_active`), the player is not
@@ -45,10 +49,10 @@ arguments raise a Lua error with a `lazy-bastards-friend:` prefix — wrap in
   channel (`lock_player`) — and the player's own toggle is on
   (`set_player_enabled`). The combined result is reported as `effective` in
   `get_player_state`. Behavior/appearance flags (`set_player_flag`) sit one
-  level below a channel and inherit its whole chain — `combat`'s effective
-  state, for instance, depends on Feed's global/lock/toggle as well as its own
-  `flags.combat` preference, even though it has no `effective` entry of its
-  own (only channels do).
+  level below a channel and inherit its whole chain — `feed_combat`'s
+  effective state, for instance, depends on Feed's global/lock/toggle as well
+  as its own `flags.feed_combat` preference, even though it has no `effective`
+  entry of its own (only channels do).
 - **Watchdog** — the mod retires Collect+Feed (and, transitively, turret
   feeding) automatically once a force's science consumption passes the
   `lbf-spm-threshold` map setting. Re-enabling masters through
@@ -59,9 +63,9 @@ arguments raise a Lua error with a `lazy-bastards-friend:` prefix — wrap in
 Internally, channels and behavior flags are nodes of one hierarchical
 settings tree (`scripts/lib/settings_tree.lua`, DESIGN.md §2/§9) — this is
 mostly an implementation detail, but two of its shapes are public-API-visible:
-`'combat'` is a tree child of `'feed'` (above), and behavior/appearance flag
-names carry a family prefix matching their tree parent (see
-`set_player_flag` below).
+`'feed_combat'` is a tree child of `'feed'` (above), and every behavior/
+appearance flag name carries a family prefix matching its tree parent, with no
+exceptions (see `set_player_flag` below).
 
 ## Functions
 
@@ -88,10 +92,15 @@ toggles or admin locks, and does *not* re-arm a tripped SPM watchdog (use
 | `value` | `boolean` | |
 
 ```lua
--- Retire the raid but keep turret feeding:
+-- Stop collecting into player inventories, but leave feeding (fuel,
+-- ingredients, turret ammo) running:
 remote.call('lazy-bastards-friend', 'set_active', 'collect', false)
-remote.call('lazy-bastards-friend', 'set_active', 'feed', false)
 ```
+
+`'feed_combat'` (turret ammo feeding) has no master of its own — it's a plain
+`'feed'` behavior flag (see `set_player_flag` below), so turning `'feed'` off
+always stops turret-feeding too. There is no way to keep turrets fed while
+`'feed'` is off.
 
 ### `get_active(channel)` → `boolean`
 
@@ -158,8 +167,9 @@ Full per-player state:
   shape     = 'circle',    -- 'circle' | 'square'
   flags     = {            -- behavior toggles (see set_player_flag)
     feed_fuel = true, feed_ingredients = true, collect_chests = false, collect_ground = false,
-    feed_trash = false, summary = false, appearance_show_others_area = false,
-    feed_rebalance = false, appearance_starvation = false, combat = true,
+    feed_trash = false, appearance_summary = false, appearance_show_others_area = false,
+    feed_rebalance = false, appearance_starvation = false, feed_combat = true,
+    appearance_use_player_color = true,
   },
   reserves  = { ['coal'] = 50 },  -- item name -> protected minimum
 }
@@ -171,20 +181,21 @@ The returned table is a copy — mutating it does nothing.
 
 Set one of the player's behavior toggles, exactly as if they clicked it in
 their panel. Valid flag names, each carrying its settings-tree family prefix
-(`feed_`, `collect_`, `appearance_`) except `summary`, which is unchanged:
+(`feed_`, `collect_`, `appearance_`) — no exceptions:
 
 | flag | default | |
 |---|---|---|
 | `'feed_fuel'` | `true` | Feed channel tops up burners with fuel |
 | `'feed_ingredients'` | `true` | Feed channel fills machine inputs (recipes, smeltables, science packs) |
+| `'feed_combat'` | `true` | Feed channel tops up ammo-turrets from the player's inventory — same rules as `feed_fuel`/`feed_ingredients`: no admin lock/master of its own, gated only by Feed's chain |
 | `'collect_chests'` | `false` | Collect channel also empties chests (needs the `lbf-allow-chest-collect` map setting) |
 | `'collect_ground'` | `false` | Collect channel also picks up items on the ground |
 | `'feed_trash'` | `false` | Feed channel drains logistic trash slots into nearby chests (paused while `collect_chests` is active) |
-| `'combat'` | `true` | Feed channel tops up ammo-turrets from the player's inventory. **2026-07-16:** moved here from the channel API — no admin lock/master of its own anymore, gated only by Feed's chain |
-| `'summary'` | `false` | show a per-cycle floating summary of what was moved |
+| `'appearance_summary'` | `false` | show a per-cycle floating summary of what was moved — gated by the `'appearance'` channel (2026-07-17: was the unprefixed exception `'summary'`, see DESIGN.md §12) |
 | `'appearance_show_others_area'` | `false` | this player also sees every other player's area render (viewer-side; does not affect whether others see *their* area) — gated by the `'appearance'` channel |
 | `'feed_rebalance'` | `false` | Feed channel moves surplus fuel/ingredients between over- and under-stocked machines, even when the player carries nothing (§1.1 pass 6) |
 | `'appearance_starvation'` | `false` | briefly show a red icon over machines that wanted an item the player couldn't spare, or green over ones already full — gated by the `'appearance'` channel |
+| `'appearance_use_player_color'` | `true` | draw the serviced area in this player's own color instead of their custom color below — gated by the `'appearance'` channel (2026-07-17: newly remote-settable, see DESIGN.md §12) |
 
 Note: `appearance_fill` ("Fill area") is **not** in this table — it graduated
 to the `'appearance'` channel's own toggle (2026-07-16), so it's set through

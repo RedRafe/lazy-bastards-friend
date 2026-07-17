@@ -25,18 +25,19 @@ State.channels = { 'feed', 'collect', 'appearance' }
 --- reuse the existing unprefixed locale keys (§4.2, `relative.lua`'s
 --- `locale_suffix`).
 ---
---- 'combat' is a true child of 'feed' (DESIGN.md §12) with no admin lock/
---- master of its own (2026-07-16, "vertical" refactor): turret feeding is
+--- 'feed_combat' is a true child of 'feed' (DESIGN.md §12) with no admin
+--- lock/master of its own (2026-07-16, "vertical" refactor): turret feeding is
 --- fully absorbed into Feed — it's just another per-player preference in
 --- Feed's advanced list now (like `feed_fuel`), not a channel. It no longer
 --- has a `State.channels` entry or a dedicated admin-GUI column; admins gate
 --- it only indirectly via Feed's own master/lock. Still exposed remotely, but
 --- through `set_player_flag`/`get_player_state.flags` like any other flag,
---- not `set_active`/`lock_player`.
+--- not `set_active`/`lock_player`. (Named bare `combat` until 2026-07-17,
+--- when the family-prefix convention above was made exceptionless — see §12.)
 ---
 --- 'appearance' replaces the old inert umbrella node of the same name,
 --- promoted to a real channel (own global master + per-player lock, third
---- `State.channels` slot, replacing 'combat's admin-GUI column; briefly
+--- `State.channels` slot, replacing 'feed_combat's admin-GUI column; briefly
 --- called 'renders' internally before this rename, later that same day --
 --- see DESIGN.md §12): its `setting` is the former `appearance_fill` node
 --- ("Fill area" -- DESIGN.md §9 flagged this as the future "gate rendering
@@ -47,7 +48,15 @@ State.channels = { 'feed', 'collect', 'appearance' }
 --- starvation icons regardless of individual prefs (destructive); leaving it
 --- on is non-destructive -- each player's own opt-in (`appearance_fill`,
 --- `appearance_show_others_area`, `appearance_starvation`) still applies as
---- before.
+--- before. 'appearance_use_player_color' and 'appearance_summary' joined the
+--- same children list on 2026-07-17 (DESIGN.md §12): both are plain booleans
+--- structurally identical to their siblings (own render-color choice; the
+--- flying-text transfer summary), so hand-gating them separately in
+--- `relative.lua` instead of through the tree was an inconsistency, not a
+--- deliberate exception — same reasoning as the `feed_combat` rename above.
+--- `appearance_use_player_color` is newly exposed via `set_player_flag`/
+--- `get_player_state` as a result (it never was before); `summary` becomes
+--- `appearance_summary` there, losing its "one unprefixed flag" exception.
 local TREE_DEF = {
     {
         id = 'mod',
@@ -65,9 +74,9 @@ local TREE_DEF = {
                 children = {
                     { id = 'feed_fuel', setting = 'lbf-feed-fuel' },
                     { id = 'feed_ingredients', setting = 'lbf-feed-ingredients' },
-                    { id = 'feed_trash', setting = 'lbf-drain-trash' },
-                    { id = 'feed_rebalance', setting = 'lbf-rebalance' },
-                    { id = 'combat' },
+                    { id = 'feed_trash', setting = 'lbf-feed-trash' },
+                    { id = 'feed_rebalance', setting = 'lbf-feed-rebalance' },
+                    { id = 'feed_combat', setting = 'lbf-feed-combat' },
                 },
             },
             {
@@ -76,6 +85,8 @@ local TREE_DEF = {
                 children = {
                     { id = 'appearance_show_others_area', setting = 'lbf-show-others-area' },
                     { id = 'appearance_starvation', setting = 'lbf-show-starvation' },
+                    { id = 'appearance_use_player_color', setting = 'lbf-use-my-color' },
+                    { id = 'appearance_summary', setting = 'lbf-show-summary' },
                 },
             },
         },
@@ -136,9 +147,6 @@ function State.init()
     for _, data in pairs(storage.players) do
         data.settings = data.settings or {}
         Tree:init_player(data.settings)
-        if data.summary_enabled == nil then
-            data.summary_enabled = false
-        end
         data.summary = data.summary or { collected = {}, fed = {}, next_flush = 0 }
         data.excluded = data.excluded or {}
         data.ui = data.ui or State.default_ui()
@@ -159,10 +167,8 @@ end
 --- @field settings table<string, {enabled: boolean, allowed: boolean}> settings-tree state (channels, behavior flags, appearance toggles)
 --- @field radius uint
 --- @field shape 'circle'|'square'
---- @field use_player_color boolean
---- @field color Color
+--- @field color Color used when appearance_use_player_color is off
 --- @field opacity double
---- @field summary_enabled boolean flying-text transfer summary toggle (ungated — see DESIGN.md §12)
 --- @field reserves table<string, uint>
 --- @field excluded table<uint, boolean> unit_number -> excluded from this player's raids (§10.4)
 --- @field cache {key: string, tick: uint, x: double, y: double, entities: LuaEntity[]}?
@@ -198,10 +204,8 @@ function State.get_player_data(player_index)
             settings = {},
             radius = 16,
             shape = 'circle',
-            use_player_color = true,
             color = { r = 1, g = 0.5, b = 0, a = 1 },
             opacity = 0.08,
-            summary_enabled = false,
             reserves = {},
             excluded = {},
             render = {},
@@ -234,17 +238,9 @@ local VALUE_SETTINGS = {
         get = function(data) return math.floor(data.opacity * 100 + 0.5) end,
         set = function(data, value) data.opacity = value / 100 end,
     },
-    ['lbf-use-my-color'] = {
-        get = function(data) return data.use_player_color end,
-        set = function(data, value) data.use_player_color = value end,
-    },
     ['lbf-color'] = {
         get = function(data) return data.color end,
         set = function(data, value) data.color = { r = value.r, g = value.g, b = value.b, a = 1 } end,
-    },
-    ['lbf-show-summary'] = {
-        get = function(data) return data.summary_enabled end,
-        set = function(data, value) data.summary_enabled = value end,
     },
 }
 

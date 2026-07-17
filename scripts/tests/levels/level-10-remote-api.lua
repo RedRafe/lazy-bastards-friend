@@ -68,11 +68,11 @@ Event.add(defines.events.on_player_created, function(event)
         return locked_off and unlocked_on
     end)
 
-    -- 'combat' has no admin lock/channel of its own (§1/§12): locking Feed is
-    -- the only way an admin stops it now. get_player_state has no
-    -- `effective.combat` entry to read (it's a flag, not a channel), so this
-    -- only asserts the one lock path that actually gates it still works.
-    Harness.check('lock_player("feed") is the only admin lock reaching combat', function()
+    -- 'feed_combat' has no admin lock/channel of its own (§1/§12): locking
+    -- Feed is the only way an admin stops it now. get_player_state has no
+    -- `effective.feed_combat` entry to read (it's a flag, not a channel), so
+    -- this only asserts the one lock path that actually gates it still works.
+    Harness.check('lock_player("feed") is the only admin lock reaching feed_combat', function()
         call('lock_player', player.index, 'feed', true)
         local feed_locked = call('get_player_state', player.index).effective.feed == false
         call('lock_player', player.index, 'feed', false)
@@ -88,11 +88,11 @@ Event.add(defines.events.on_player_created, function(event)
         return on and off
     end)
 
-    Harness.check('combat is settable through set_player_flag', function()
-        call('set_player_flag', player.index, 'combat', false)
-        local off = call('get_player_state', player.index).flags.combat == false
-        call('set_player_flag', player.index, 'combat', true)
-        local on = call('get_player_state', player.index).flags.combat == true
+    Harness.check('feed_combat is settable through set_player_flag', function()
+        call('set_player_flag', player.index, 'feed_combat', false)
+        local off = call('get_player_state', player.index).flags.feed_combat == false
+        call('set_player_flag', player.index, 'feed_combat', true)
+        local on = call('get_player_state', player.index).flags.feed_combat == true
         return off and on
     end)
 

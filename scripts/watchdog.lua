@@ -61,7 +61,7 @@ end
 local function trip()
     storage.auto_disabled = true
     storage.spm_strikes = 0
-    -- 'combat' is a tree child of 'feed' (DESIGN.md §12): stopping feed
+    -- 'feed_combat' is a tree child of 'feed' (DESIGN.md §12): stopping feed
     -- already stops turret-feeding too, no separate write needed.
     State.set_master('collect', false)
     State.set_master('feed', false)
@@ -131,8 +131,8 @@ end
 function Watchdog.rebuild()
     local active = storage.settings
     -- Nothing to retire while the global switch is off (§4.3 "Everyone" row).
-    -- 'combat' isn't checked separately — it's a tree child of 'feed' now, so
-    -- stopping feed always stops it too (DESIGN.md §12).
+    -- 'feed_combat' isn't checked separately — it's a tree child of 'feed'
+    -- now, so stopping feed always stops it too (DESIGN.md §12).
     local stops_anything = active.mod.enabled and (active.collect.enabled or active.feed.enabled)
     storage.watchdog_armed = (
         settings.global['lbf-watchdog-enabled'].value == true

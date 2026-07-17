@@ -27,7 +27,7 @@ end
 --- @param alpha double
 --- @return Color
 local function resolve_color(player, data, alpha)
-    local base = data.use_player_color and player.color or data.color
+    local base = State.effective(player.index, 'appearance_use_player_color') and player.color or data.color
     return { r = base.r * alpha, g = base.g * alpha, b = base.b * alpha, a = alpha }
 end
 
@@ -154,7 +154,7 @@ end
 --- @param player LuaPlayer
 function Rendering.on_color_changed(player)
     local data = State.get_player_data(player.index)
-    if not data.use_player_color then
+    if not State.effective(player.index, 'appearance_use_player_color') then
         return
     end
     local render = data.render

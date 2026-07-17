@@ -78,17 +78,24 @@ data:extend({
     },
     {
         type = 'bool-setting',
-        name = 'lbf-drain-trash',
+        name = 'lbf-feed-combat',
         setting_type = 'runtime-per-user',
-        default_value = false,
+        default_value = true,
         order = 'b[feed]-c',
     },
     {
         type = 'bool-setting',
-        name = 'lbf-rebalance',
+        name = 'lbf-feed-trash',
         setting_type = 'runtime-per-user',
         default_value = false,
         order = 'b[feed]-d',
+    },
+    {
+        type = 'bool-setting',
+        name = 'lbf-feed-rebalance',
+        setting_type = 'runtime-per-user',
+        default_value = false,
+        order = 'b[feed]-e',
     },
     {
         type = 'bool-setting',

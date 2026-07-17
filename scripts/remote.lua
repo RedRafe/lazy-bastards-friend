@@ -56,7 +56,7 @@ end
 
 -- Behavior/appearance flags exposed through set_player_flag / get_player_state.
 -- Names match the settings-tree node ids (state.lua's TREE_DEF) one-to-one,
--- except 'summary' which isn't a tree node (DESIGN.md §12).
+-- no exceptions (as of 2026-07-17, see below).
 -- BREAKING (2026-07-16): renamed from the flat 'fuel'/'chests'/... names to
 -- match the tree's family-prefixed ids — see changelog.txt / docs/API.md.
 -- BREAKING (2026-07-16): 'appearance_show_others' renamed to
@@ -68,17 +68,27 @@ end
 -- no longer a flag — it graduated to the new 'appearance' channel's own
 -- `setting`, so it's reachable through set_active/get_active/lock_player/
 -- set_player_enabled instead.
+-- BREAKING (2026-07-17): 'combat' renamed to 'feed_combat' — it was the one
+-- flag without its family's prefix, an oversight from the move above, not a
+-- deliberate exception (see DESIGN.md §12).
+-- BREAKING (2026-07-17): 'summary' renamed to 'appearance_summary' — it
+-- became a real tree child of 'appearance' (structurally identical to
+-- 'appearance_starvation': a plain boolean, previously hand-gated instead of
+-- tree-gated for no good reason), losing its "one unprefixed flag" exception.
+-- 'appearance_use_player_color' is new here — it was never remotely settable
+-- before, for the same reason (DESIGN.md §12).
 local FLAG_NAMES = {
     feed_fuel = true,
     feed_ingredients = true,
     collect_chests = true,
     collect_ground = true,
     feed_trash = true,
-    summary = true,
     appearance_show_others_area = true,
     feed_rebalance = true,
     appearance_starvation = true,
-    combat = true,
+    feed_combat = true,
+    appearance_summary = true,
+    appearance_use_player_color = true,
 }
 
 --- @param flag any
@@ -162,11 +172,7 @@ remote.add_interface('lazy-bastards-friend', {
         end
         local flags = {}
         for name in pairs(FLAG_NAMES) do
-            if name == 'summary' then
-                flags[name] = data.summary_enabled == true
-            else
-                flags[name] = data.settings[name].enabled == true
-            end
+            flags[name] = data.settings[name].enabled == true
         end
         return {
             enabled = channel_enabled_map(data.settings),
@@ -187,11 +193,7 @@ remote.add_interface('lazy-bastards-friend', {
     set_player_flag = function(player_index, flag, value)
         local player = check_player(player_index)
         check_flag(flag)
-        if flag == 'summary' then
-            State.get_player_data(player.index).summary_enabled = value == true
-            State.push_setting(player, 'lbf-show-summary')
-            State.refresh(player)
-        elseif flag == 'appearance_show_others_area' then
+        if flag == 'appearance_show_others_area' then
             -- Viewer-opt-in (§12): changes what *other* owners' renders show
             -- this player, not this player's own area.
             State.set_enabled(player, flag, value == true)

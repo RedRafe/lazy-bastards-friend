@@ -61,18 +61,6 @@ data:extend({
         scale = 0.25,
         flags = { 'icon' },
     },
-    -- Inline warning icon for the disabled-flag tooltips (relative.lua's
-    -- flag_tooltip/shape_tooltip) — core's alert triangle rather than the
-    -- virtual-signal sprite, scaled down to match the family/flag icons'
-    -- effective 16px so it sits flush in a text line.
-    {
-        type = 'sprite',
-        name = 'lbf-alert-warning',
-        filename = '__core__/graphics/icons/alerts/warning-icon.png',
-        size = 64,
-        scale = 0.25,
-        flags = { 'icon' },
-    },
     -- Statistics-only item: the runtime pumps transferred
     -- counts into item production statistics under this name, so the mod's
     -- activity shows up in the vanilla production graphs (like base's 'science').
@@ -114,8 +102,10 @@ end
 
 -- Per-flag icons for the relative panel's Behavior/Appearance sprite-button
 -- rows (tools/make_flag_icons.py). Separate from family_icons above: own
--- source directory, and each name here maps 1:1 to a settings-tree flag id
--- (or a plain preference like 'summary'), not a channel/family umbrella.
+-- source directory, and each name here is a sprite suffix, independent of the
+-- settings-tree flag id it's used for (relative.lua's FLAG_SPRITE_SUFFIX maps
+-- id -> suffix; several ids share a shorter suffix than their id, e.g.
+-- 'appearance_summary' -> 'summary').
 local flag_icons = {
     'fuel', 'ingredients', 'combat', 'trash', 'rebalance',
     'chests', 'ground', 'use-player-color', 'show-others', 'starvation', 'summary',
