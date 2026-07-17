@@ -23,8 +23,6 @@ taken over. Admins can always re-enable it.
   give — a coal-hoarding furnace can top off its coal-starved neighbor.
 - **Trash drain** — empties your logistic trash slots into nearby chests
   (already holding the item, then requesting it, then any empty chest).
-- **Vehicle support** — while driving, the serviced area follows your vehicle
-  and its fuel tank gets topped up too. Always on, no setting needed.
 - **Per-entity exclusion** — hover any machine and press a (unbound by default)
   hotkey to permanently exclude it from raids, independent of any channel.
 - **Starvation feedback** — optional icons flash over machines that wanted an
@@ -56,8 +54,7 @@ per-player preference, editable from the in-game panel or mirrored mod settings.
 
 ## Links
 
-- [Architecture](.vscode/ARCHITECTURE.md) — module layout and how the pieces fit together
-- [Remote API](docs/API.md) — scripting interface for other mods/scenarios
+- [Remote API](https://github.com/RedRafe/lazy-bastards-friend/blob/main/docs/API.md) — scripting interface for other mods/scenarios
 
 ---
 
