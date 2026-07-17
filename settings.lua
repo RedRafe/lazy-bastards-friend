@@ -1,7 +1,5 @@
 data:extend({
-    -- Global runtime (map settings, admin-editable). Ordered by family to
-    -- match the relative GUI's mod-setting-name icon prefixes: watchdog,
-    -- then collect (behavior), then appearance, then other/technical.
+    -- Global runtime (map settings, admin-editable). Ordered by family to match the relative GUI's icon prefixes: watchdog, collect (behavior), appearance, then other/technical.
     {
         type = 'bool-setting',
         name = 'lbf-watchdog-enabled',
@@ -52,9 +50,7 @@ data:extend({
         hidden = true,
         order = 'd[other]-a',
     },
-    -- Per-player runtime. Ordered to match the relative GUI top-to-bottom:
-    -- master switch, then Behavior (Feed, then Collect), then
-    -- Appearance (radius through show-starvation/summary).
+    -- Per-player runtime. Ordered to match the relative GUI top-to-bottom: master switch, then Behavior (Feed, then Collect), then Appearance (radius through show-starvation/summary).
     {
         type = 'bool-setting',
         name = 'lbf-enabled',

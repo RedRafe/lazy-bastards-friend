@@ -1,6 +1,4 @@
---- Area-of-effect rendering (DESIGN.md §5). Render objects target the character
---- entity so the engine moves them for free — no per-tick Lua. Objects are destroyed
---- and recreated on any state/appearance change; color-only changes mutate in place.
+--- Area-of-effect rendering. Render objects target the character entity so the engine moves them for free (no per-tick Lua); objects are destroyed and recreated on any state/appearance change, but color-only changes mutate in place.
 
 local State = require('__lazy-bastards-friend__.scripts.state')
 
@@ -31,17 +29,13 @@ local function resolve_color(player, data, alpha)
     return { r = base.r * alpha, g = base.g * alpha, b = base.b * alpha, a = alpha }
 end
 
---- Destroy and (if any channel is effective and an anchor exists) redraw the
---- AoE. Registered as a State refresh handler. The anchor is the character —
---- targeting it makes the engine move the render every tick for free, no
---- per-tick Lua.
+--- Destroy and (if any channel is effective and an anchor exists) redraw the AoE. Registered as a State refresh handler; the anchor is the character, so the engine moves the render every tick for free.
 --- @param player LuaPlayer
 function Rendering.refresh(player)
     local data = State.get_player_data(player.index)
     destroy(data)
 
-    -- fill=false hides the area entirely (edge included); opacity is kept for
-    -- when it's re-enabled.
+    -- fill=false hides the area entirely (edge included); opacity is kept for when it's re-enabled.
     if not player.connected or not State.effective(player.index, 'appearance') or not State.any_effective(player.index) then
         return
     end
@@ -53,12 +47,7 @@ function Rendering.refresh(player)
     local radius = State.get_radius(player.index)
     local surface = anchor.surface
 
-    -- Visibility is viewer-opt-in, not owner-opt-out (§12): the owner always
-    -- sees their own area; every other player is added only if *they* have
-    -- opted in to seeing others' areas. Connection status doesn't matter here
-    -- — an offline player's client renders nothing regardless, and this way
-    -- their entry is already correct the moment they reconnect, so join/leave
-    -- never need to touch anyone else's whitelist (see control.lua).
+    -- Visibility is viewer-opt-in, not owner-opt-out: the owner always sees their own area; others are added only if they've opted in to seeing others' areas. Connection status doesn't matter — an offline client renders nothing anyway, so join/leave never need to touch anyone else's whitelist.
     local players = { player.index }
     for _, viewer in pairs(game.players) do
         if viewer.index ~= player.index and State.effective(viewer.index, 'appearance_show_others_area') then
@@ -111,9 +100,7 @@ function Rendering.refresh(player)
     end
 end
 
--- Starvation feedback (DESIGN.md §10.10): short-lived icons over machines
--- that wanted an item the player couldn't spare (starved) or that are
--- already full (saturated). time_to_live self-cleans — no storage bookkeeping.
+-- Starvation feedback: short-lived icons over machines that wanted an item the player couldn't spare (starved) or are already full (saturated); time_to_live self-cleans, no storage bookkeeping.
 local STARVATION_TICKS = 180
 local STARVED_TINT = { r = 1, g = 0.3, b = 0.3, a = 1 }
 local SATURATED_TINT = { r = 0.3, g = 1, b = 0.3, a = 1 }

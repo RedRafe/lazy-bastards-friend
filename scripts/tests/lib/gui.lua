@@ -1,12 +1,6 @@
---- On-screen results panel for test-bench levels. Replaces the old chat-print
---- reporting (level tag/instructions, per-check PASS/FAIL, final tally) with a
---- single frame pinned to the top-left of the screen, kept in sync for every
---- connected player. Harness owns when things resolve; this module only knows
---- how to render whatever Harness/Bench hand it.
+--- On-screen results panel for test-bench levels: a single frame pinned top-left, kept in sync for every connected player. Harness owns when things resolve; this module only renders whatever Harness/Bench hand it.
 ---
---- Layout mirrors RedMew's admin_panel/tasklist GUIs: a titlebar, then boxed
---- `inside_shallow_frame` sections with `subheader_frame` headers (Instructions,
---- Checks) rather than bare labels stacked in a column.
+--- Layout mirrors RedMew's admin_panel/tasklist GUIs: a titlebar, then boxed `inside_shallow_frame` sections with `subheader_frame` headers (Instructions, Checks) rather than bare labels stacked in a column.
 
 local GuiUtil = require('__lazy-bastards-friend__.scripts.lib.gui')
 
@@ -48,8 +42,7 @@ local function add_section(frame, name, caption)
     return inner, header_flow
 end
 
---- Small bordered tile showing a big colored number over a caption — used for
---- the live Pending/Passed/Failed counts instead of a single text line.
+--- Small bordered tile showing a big colored number over a caption — used for the live Pending/Passed/Failed counts.
 --- @param parent LuaGuiElement
 --- @param name string
 --- @param color Color
@@ -197,9 +190,7 @@ function Gui.upsert(name, status, extra)
     Gui.refresh()
 end
 
---- Marks the suite as complete; the panel keeps showing the full table plus a
---- closing banner — this panel is the sole on-screen record of scenario
---- completion (see Harness.summary_after).
+--- Marks the suite as complete; the panel keeps showing the full table plus a closing banner — the sole on-screen record of scenario completion (see Harness.summary_after).
 --- @param passed integer
 --- @param failed integer
 function Gui.finish(passed, failed)

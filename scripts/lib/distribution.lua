@@ -1,9 +1,5 @@
---- Balanced distribution math (DESIGN.md §1.3). Reimplemented from scratch;
---- reference: reference/even-distribution.lua (get_balanced_distribution).
----
---- Unlike the reference, passes 3-5 never withdraw from machines, so this is a
---- water-fill: raise the emptiest holders first until the budget runs out or
---- everyone reaches `cap`. Holders already at/above `cap` receive nothing.
+--- Balanced distribution math. Reimplemented from scratch; reference: reference/even-distribution.lua (get_balanced_distribution).
+--- Unlike the reference, passes 3-5 never withdraw from machines, so this is a water-fill: raise the emptiest holders first until the budget runs out or everyone reaches `cap`; holders already at/above `cap` receive nothing.
 
 local Distribution = {}
 
@@ -40,9 +36,7 @@ function Distribution.balanced_fill(counts, available, cap)
         return clamped[a] < clamped[b]
     end)
 
-    -- Find the highest common water level (<= cap) the budget can afford:
-    -- sweep breakpoints (each next-higher holder count), paying to raise all
-    -- holders below the current level in lockstep.
+    -- Find the highest common water level (<= cap) the budget affords: sweep breakpoints, paying to raise all holders below the current level in lockstep.
     local remaining = available
     local level = clamped[order[1]]
     local idx = 1
@@ -94,13 +88,7 @@ function Distribution.balanced_fill(counts, available, cap)
     return gives, used
 end
 
---- Balanced machine-to-machine redistribution (DESIGN.md §1.1 pass 6, §12):
---- reimplements the reference's `get_balanced_distribution`, but split into
---- separate give/take arrays (this module's convention) instead of signed
---- deltas. Holders are clamped to `cap` first — anything a holder carries
---- above `cap` is left untouched (there is no legal destination for it: every
---- other holder is already at or below the fair share), so it never counts
---- toward the pool and is never withdrawn.
+--- Balanced machine-to-machine redistribution: reimplements the reference's `get_balanced_distribution`, but split into separate give/take arrays instead of signed deltas. Holders are clamped to `cap` first; anything above `cap` is left untouched and never counted or withdrawn (no legal destination for it).
 --- @param counts integer[] current per-holder item counts
 --- @param cap integer max per-holder amount the fill/pool math considers
 --- @return integer[] gives per-holder amounts to receive

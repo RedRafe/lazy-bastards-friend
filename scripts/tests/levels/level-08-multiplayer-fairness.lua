@@ -1,9 +1,4 @@
---- L08 — Multiplayer fairness (DESIGN.md §1.4/§12): a stateless pending-rivals
---- scheme keeps two players who both reach the same machine from double-feeding
---- past its cap, and splits a shared workload roughly evenly instead of always
---- favoring whoever's scheduler slot fires first. Needs a second connected
---- player to mean anything — that's the one thing this level can't script for
---- itself, so it stays instruction-driven.
+--- L08 — Multiplayer fairness: a stateless pending-rivals scheme keeps two players reaching the same machine from double-feeding past its cap, and splits shared workload evenly instead of favoring whoever's scheduler slot fires first. Needs a second connected player to mean anything, so it stays instruction-driven.
 
 local Bench = require('__lazy-bastards-friend__.scripts.tests.lib.bench')
 local Event = require('__lazy-bastards-friend__.scripts.lib.event')
@@ -11,8 +6,7 @@ local Event = require('__lazy-bastards-friend__.scripts.lib.event')
 local AREA = { { -12, -10 }, { 12, 10 } }
 
 local BENCH = {
-    -- Small-capacity furnaces in the middle: two players feeding at once must
-    -- not deliver more fuel/ore than the input slots can hold.
+    -- Small-capacity furnaces: two players feeding at once must not overfill the input slots.
     { name = 'stone-furnace', position = { -6, 0 } },
     { name = 'stone-furnace', position = { -2, 0 } },
     { name = 'stone-furnace', position = { 2, 0 } },

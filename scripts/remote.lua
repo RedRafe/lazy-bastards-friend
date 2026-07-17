@@ -1,6 +1,5 @@
---- Public remote interface (DESIGN.md §10.1) — everything the mod's own script
---- can do, other mods and scenarios can do through here. Documented with
---- copy-paste examples in docs/API.md; keep the two in sync.
+--- Public remote interface — everything the mod's own script can do, other mods/scenarios can do through here.
+--- Documented with copy-paste examples in docs/API.md; keep the two in sync.
 
 local State = require('__lazy-bastards-friend__.scripts.state')
 local Watchdog = require('__lazy-bastards-friend__.scripts.watchdog')
@@ -54,29 +53,9 @@ local function channel_locked_map(player_settings)
     return map
 end
 
--- Behavior/appearance flags exposed through set_player_flag / get_player_state.
--- Names match the settings-tree node ids (state.lua's TREE_DEF) one-to-one,
--- no exceptions (as of 2026-07-17, see below).
--- BREAKING (2026-07-16): renamed from the flat 'fuel'/'chests'/... names to
--- match the tree's family-prefixed ids — see changelog.txt / docs/API.md.
--- BREAKING (2026-07-16): 'appearance_show_others' renamed to
--- 'appearance_show_others_area' and flipped from owner-opt-out ("share my
--- area") to viewer-opt-in ("show me others' areas") — see DESIGN.md §5/§12.
--- BREAKING (2026-07-16): 'combat' moved here from the channel API — it's a
--- plain per-player preference now, gated by Feed's chain, with no admin
--- lock/master of its own (§1/§12 "vertical" refactor). 'appearance_fill' is
--- no longer a flag — it graduated to the new 'appearance' channel's own
--- `setting`, so it's reachable through set_active/get_active/lock_player/
--- set_player_enabled instead.
--- BREAKING (2026-07-17): 'combat' renamed to 'feed_combat' — it was the one
--- flag without its family's prefix, an oversight from the move above, not a
--- deliberate exception (see DESIGN.md §12).
--- BREAKING (2026-07-17): 'summary' renamed to 'appearance_summary' — it
--- became a real tree child of 'appearance' (structurally identical to
--- 'appearance_starvation': a plain boolean, previously hand-gated instead of
--- tree-gated for no good reason), losing its "one unprefixed flag" exception.
--- 'appearance_use_player_color' is new here — it was never remotely settable
--- before, for the same reason (DESIGN.md §12).
+-- Behavior/appearance flags exposed through set_player_flag / get_player_state. Names match the settings-tree node
+-- ids (state.lua's TREE_DEF) one-to-one. 'appearance' itself is not a flag here — it's a channel, reachable through
+-- set_active/get_active/lock_player/set_player_enabled instead.
 local FLAG_NAMES = {
     feed_fuel = true,
     feed_ingredients = true,
@@ -101,17 +80,16 @@ local function check_flag(flag)
 end
 
 remote.add_interface('lazy-bastards-friend', {
-    --- The global whole-mod switch (the admin GUI's "Everyone" On/Off).
-    --- Preserves channel masters and per-player settings; does not touch the
-    --- SPM watchdog.
+    --- The global whole-mod switch (the admin GUI's "Everyone" On/Off). Preserves channel masters and per-player
+    --- settings; does not touch the SPM watchdog.
     --- @param value boolean
     set_global_master = function(value)
         State.set_global_master(value == true)
         State.refresh_all()
     end,
 
-    --- Global master switch for one channel. Does not touch the SPM watchdog —
-    --- re-arming after a trip goes through set_watchdog_enabled(true).
+    --- Global master switch for one channel. Does not touch the SPM watchdog — re-arming after a trip goes
+    --- through set_watchdog_enabled(true).
     --- @param channel LbfChannel
     --- @param value boolean
     set_active = function(channel, value)
@@ -125,8 +103,7 @@ remote.add_interface('lazy-bastards-friend', {
         return storage.settings[check_channel(channel)].enabled
     end,
 
-    --- Admin lock: while locked the channel is off for that player regardless
-    --- of their own preference.
+    --- Admin lock: while locked the channel is off for that player regardless of their own preference.
     --- @param player_index uint
     --- @param channel LbfChannel
     --- @param locked boolean
@@ -136,9 +113,8 @@ remote.add_interface('lazy-bastards-friend', {
         State.refresh(player)
     end,
 
-    --- Admin master lock: while locked the whole mod is off for that player,
-    --- every channel, regardless of their own preferences (which are kept).
-    --- The "On/Off" column of the admin GUI's player list.
+    --- Admin master lock: while locked the whole mod is off for that player, every channel, regardless of their
+    --- own preferences (which are kept). The "On/Off" column of the admin GUI's player list.
     --- @param player_index uint
     --- @param locked boolean
     lock_player_master = function(player_index, locked)
@@ -194,8 +170,7 @@ remote.add_interface('lazy-bastards-friend', {
         local player = check_player(player_index)
         check_flag(flag)
         if flag == 'appearance_show_others_area' then
-            -- Viewer-opt-in (§12): changes what *other* owners' renders show
-            -- this player, not this player's own area.
+            -- Viewer-opt-in: changes what *other* owners' renders show this player, not this player's own area.
             State.set_enabled(player, flag, value == true)
             State.refresh_all()
         else
@@ -227,9 +202,8 @@ remote.add_interface('lazy-bastards-friend', {
         }
     end,
 
-    --- Set the lbf-spm-threshold map setting. Runtime-global settings can only
-    --- be written by the mod that owns them, so scenarios/other mods must go
-    --- through here. Fires the usual setting-changed handling (debounce reset).
+    --- Set the lbf-spm-threshold map setting. Runtime-global settings can only be written by the mod that owns
+    --- them, so scenarios/other mods must go through here; fires the usual setting-changed handling.
     --- @param value number
     set_spm_threshold = function(value)
         if type(value) ~= 'number' or value < 0 then
@@ -238,9 +212,8 @@ remote.add_interface('lazy-bastards-friend', {
         settings.global['lbf-spm-threshold'] = { value = value }
     end,
 
-    --- The watchdog on/off switch (also the lbf-watchdog-enabled map setting).
-    --- Turning it on un-trips and re-arms after an auto-retirement — the only
-    --- re-arm path; set_active(..., true) alone leaves the watchdog tripped.
+    --- The watchdog on/off switch (also the lbf-watchdog-enabled map setting). Turning it on un-trips and re-arms
+    --- after an auto-retirement — the only re-arm path; set_active(..., true) alone leaves it tripped.
     --- @param value boolean
     set_watchdog_enabled = function(value)
         Watchdog.set_enabled(value == true)
@@ -273,12 +246,9 @@ remote.add_interface('lazy-bastards-friend', {
         State.get_player_data(player.index).reserves[item_name] = count and math.floor(count) or nil
     end,
 
-    --- Exclude/include one entity from this player's raids (DESIGN.md §10.4),
-    --- as if hovering it and pressing the exclude hotkey. Unlike the hotkey
-    --- path this takes a bare unit_number (no LuaEntity handle), so it cannot
-    --- register cleanup on the entity's destruction — callers that exclude an
-    --- entity through this call are responsible for clearing it again if the
-    --- entity might outlive their own bookkeeping.
+    --- Exclude/include one entity from this player's raids, as if pressing the exclude hotkey. Unlike the hotkey
+    --- path this takes a bare unit_number (no LuaEntity handle), so it cannot register cleanup on the entity's
+    --- destruction — callers are responsible for clearing it if the entity might outlive their own bookkeeping.
     --- @param player_index uint
     --- @param unit_number uint
     --- @param excluded boolean

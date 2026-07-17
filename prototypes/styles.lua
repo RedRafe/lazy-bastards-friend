@@ -1,20 +1,12 @@
---- Style prototypes backing the runtime GUIs (scripts/lib/gui.lua,
---- scripts/gui/*, scripts/tests/lib/gui.lua). Anything used in more than one
---- place, or created inside a loop, gets a named style here so runtime code
---- just references it; genuine one-off tweaks (a single padding on a single
---- element, dynamic per-player colors) stay as runtime set_style calls.
-
 local styles = data.raw['gui-style'].default
 
 -- Shared building blocks (scripts/lib/gui.lua) -------------------------------
 
--- Stretching spacer (GuiUtil.add_pusher).
 styles.lbf_pusher = {
     type = 'empty_widget_style',
     horizontally_stretchable = 'on',
 }
 
--- Titlebar drag handle for screen-anchored frames (GuiUtil.add_titlebar).
 styles.lbf_drag_handle = {
     type = 'empty_widget_style',
     parent = 'draggable_space_header',
@@ -22,7 +14,6 @@ styles.lbf_drag_handle = {
     height = 24,
 }
 
--- Section header frame + its inner flow (GuiUtil.add_collapsible, test panel sections).
 styles.lbf_subheader_frame = {
     type = 'frame_style',
     parent = 'subheader_frame',
@@ -35,14 +26,12 @@ styles.lbf_subheader_flow = {
     horizontally_stretchable = 'on',
 }
 
--- Padded vertical flow a collapsible section's content lives in.
 styles.lbf_section_body_flow = {
     type = 'vertical_flow_style',
     padding = 8,
     vertical_spacing = 6,
 }
 
--- Label + control on one line, vertically centered — the workhorse row flow.
 styles.lbf_row_flow = {
     type = 'horizontal_flow_style',
     vertical_align = 'center',
@@ -50,36 +39,25 @@ styles.lbf_row_flow = {
 
 -- Relative panel (scripts/gui/relative.lua) ----------------------------------
 
--- The collapsed panel: a single blue icon button.
 styles.lbf_open_button = {
     type = 'button_style',
     parent = 'shortcut_bar_button_blue',
     size = 32,
 }
 
--- 328 = width the reserve editor row pushes the panel to (with the 28px elem
--- button below), so opening the editor doesn't resize the frame.
--- Wordmark banner at the top of the open panel.
 styles.lbf_banner_image = {
     type = 'image_style',
     top_margin = 8,
     bottom_margin = 4,
 }
 
--- vertically_stretchable = 'off' opts out of the vertical-fill Factorio
--- applies to relative_gui_position = left/right anchors (matching the
--- docked controller_gui's height) — without it, sections below stretch to
--- fill the forced height instead of hugging their own content, which also
--- throws off vertical centering of fixed-height children like separator lines.
 styles.lbf_relative_frame = {
     type = 'frame_style',
     parent = 'frame',
-    natural_width =328,
+    natural_width = 328,
     vertically_stretchable = 'off',
 }
 
--- Custom-color frame (scripts/gui/relative.lua): centers its r/g/b rows
--- horizontally instead of hugging the frame's left edge.
 styles.lbf_color_frame = {
     type = 'frame_style',
     parent = 'bordered_frame',
@@ -87,10 +65,6 @@ styles.lbf_color_frame = {
     horizontal_align = 'center',
 }
 
--- The frame stretches its rows full-width (see lbf_color_frame above), so
--- each row also needs its own horizontal_align — otherwise the row's
--- label/slider/textfield still hug its own left edge despite the frame
--- centering the row itself.
 styles.lbf_color_row_flow = {
     type = 'horizontal_flow_style',
     parent = 'lbf_row_flow',
@@ -98,33 +72,24 @@ styles.lbf_color_row_flow = {
     horizontal_align = 'center',
 }
 
--- Advanced-options list nested under a behavior row.
 styles.lbf_indented_flow = {
     type = 'vertical_flow_style',
     left_padding = 16,
     vertical_spacing = 4,
 }
 
--- "Family section" container (GuiUtil.add_family_section): a plain vertical
--- flow, no frame/border of its own — just a header row above a body-frame.
--- top_margin puts a small gap above each section so consecutive sections
--- (siblings directly inside the content frame) don't run into each other.
 styles.lbf_section_flow = {
     type = 'vertical_flow_style',
     horizontally_stretchable = 'on',
     top_margin = 4,
 }
 
--- Header row: family icon, bold caption, a divider line filling the
--- remaining width, then the collapse/expand arrow.
 styles.lbf_section_header_flow = {
     type = 'horizontal_flow_style',
     vertical_align = 'center',
     horizontal_spacing = 6,
 }
 
--- Family icon in the header — decorative only (ignored_by_interaction), a
--- transparent slot so only the sprite itself shows.
 styles.lbf_section_icon_button = {
     type = 'button_style',
     parent = 'transparent_slot',
@@ -144,36 +109,22 @@ styles.lbf_section_caption_label = {
     font_color = { 255, 255, 255 },
 }
 
--- Divider line between the caption and the collapse arrow; stretches to fill
--- the header row.
 styles.lbf_section_header_line = {
     type = 'line_style',
     horizontally_stretchable = 'on',
 }
 
--- Vertical separator between a family's master switch and its row of
--- shortcut_bar_button flags; fixed to the buttons' own 40px height rather
--- than stretching with the row (a stretched line reads oddly tall next to
--- the switch on some resolutions).
 styles.lbf_row_separator_line = {
     type = 'line_style',
     height = 40,
 }
 
---- Appearance's separator sits next to a taller settings column (radius +
---- opacity + flag row). vertically_stretchable only takes effect between
---- cells of the same table row (Factorio ignores it in flows), so the row
---- itself is a 3-column, 1-row table rather than a flow — see
---- lbf_appearance_row_table below.
 styles.lbf_row_separator_line_stretch = {
     type = 'line_style',
     minimal_height = 40,
     vertically_stretchable = 'on',
 }
 
---- Appearance channel's switch + separator + settings row. A table (not a
---- flow) so the separator's vertically_stretchable actually fills the row
---- height set by the taller settings cell.
 styles.lbf_appearance_row_table = {
     type = 'table_style',
     horizontal_spacing = 4,
@@ -184,8 +135,6 @@ styles.lbf_appearance_row_table = {
     },
 }
 
--- Radius/opacity as a 2-column [label | slider] grid, value shown in the
--- slider's own tooltip rather than a third column (keeps the panel narrow).
 styles.lbf_appearance_sliders_table = {
     type = 'table_style',
     vertical_spacing = 4,
@@ -196,33 +145,24 @@ styles.lbf_appearance_sliders_table = {
     },
 }
 
--- Vanilla 'slider' defaults to minimal_width 160, which still pushes the
--- panel wider than the 328px it settles at elsewhere; shave 12px off so the
--- Appearance section stops resizing the whole relative GUI.
 styles.lbf_appearance_slider = {
     type = 'slider_style',
     parent = 'slider',
     minimal_width = 148,
 }
 
--- Tight-spacing row so a family's master switch + separator + shortcut-bar
--- flag strip read as one continuous unit.
 styles.lbf_icon_row_flow = {
     type = 'horizontal_flow_style',
     vertical_align = 'center',
     horizontal_spacing = 4,
 }
 
--- Reserved-items slot grid: vanilla dark tiled-slots background, scrolls past 4 rows.
 styles.lbf_reserves_scroll_pane = {
     type = 'scroll_pane_style',
     parent = 'deep_slots_scroll_pane',
     maximal_height = 160, -- 4 rows of 40px slots
 }
 
--- Import bar closing the reserved-items section, shaped like the map
--- generator's "Map exchange string" subfooter. Negative margins cancel the
--- section body's 8px padding so the bar runs flush to the section edges.
 styles.lbf_reserves_footer_frame = {
     type = 'frame_style',
     parent = 'subfooter_frame',
@@ -232,16 +172,12 @@ styles.lbf_reserves_footer_frame = {
     bottom_margin = -8,
 }
 
--- Item picker of the inline set-reserve editor; shrunk from the 40px slot
--- default to match the 28px-tall slider/textfield row and save panel width.
 styles.lbf_reserve_elem_button = {
     type = 'button_style',
     parent = 'slot_button_in_shallow_frame',
     size = 28,
 }
 
--- Amount slider of the inline set-reserve editor; narrowed so the whole
--- [elem|amount|slider|confirm] row fits the panel's natural width.
 styles.lbf_reserve_slider = {
     type = 'slider_style',
     parent = 'notched_slider',
@@ -250,8 +186,6 @@ styles.lbf_reserve_slider = {
 
 -- Admin panel (scripts/gui/admin.lua) ----------------------------------------
 
--- Player roster: vanilla /admin row striping, name column left-aligned,
--- every control column centered.
 styles.lbf_players_table = {
     type = 'table_style',
     parent = 'table_with_selection',
@@ -267,7 +201,6 @@ styles.lbf_players_table = {
 
 -- Test results panel (scripts/tests/lib/gui.lua) ------------------------------
 
--- Pending/Passed/Failed count tile (number color stays runtime — per tile).
 styles.lbf_stat_tile_frame = {
     type = 'frame_style',
     parent = 'bordered_frame',
@@ -286,7 +219,6 @@ styles.lbf_muted_label = {
     font_color = { 170, 170, 170 },
 }
 
--- Wrapping labels created per instruction / per check row.
 styles.lbf_instruction_label = {
     type = 'label_style',
     single_line = false,

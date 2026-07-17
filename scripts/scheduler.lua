@@ -1,7 +1,4 @@
---- Conditional round-robin scheduler (DESIGN.md §7). One player is serviced per
---- firing; the nth-tick interval is update_period / queue_size, so each player
---- gets one cycle per period with the load spread evenly. No queue = no handler
---- registered at all — the mod costs zero while nobody needs it.
+--- Conditional round-robin scheduler: one player serviced per firing, nth-tick interval is update_period / queue_size. Empty queue = no handler registered.
 
 local State = require('__lazy-bastards-friend__.scripts.state')
 local Raid = require('__lazy-bastards-friend__.scripts.raid')
@@ -9,9 +6,7 @@ local Event = require('__lazy-bastards-friend__.scripts.lib.event')
 
 local Scheduler = {}
 
---- Interval currently registered via Event.on_nth_tick. Plain local (not
---- storage): it mirrors registration state, which is rebuilt from scratch on
---- every load via Scheduler.apply.
+--- Interval currently registered; plain local, rebuilt from storage on every load via Scheduler.apply.
 --- @type integer?
 local registered_interval
 
@@ -23,9 +18,7 @@ local function on_nth_tick_handler()
         return
     end
     if scheduler.cursor > #queue then
-        -- New sweep: rotate the order so the tail position (which collects any
-        -- fair-share remainder, §1.4) doesn't always fall on the same player.
-        table.insert(queue, table.remove(queue, 1))
+        table.insert(queue, table.remove(queue, 1)) -- new sweep: rotate so the fair-share remainder doesn't always land on the same player
         scheduler.cursor = 1
     end
     local player_index = queue[scheduler.cursor]
@@ -33,8 +26,7 @@ local function on_nth_tick_handler()
 
     local player = game.get_player(player_index)
     if player and player.connected and State.any_effective(player_index) then
-        -- Players still due in this sweep contest shared collect sources (§1.4).
-        local pending
+        local pending -- players still due in this sweep, contesting shared collect sources
         for i = scheduler.cursor, #queue do
             pending = pending or {}
             pending[#pending + 1] = queue[i]
@@ -45,12 +37,9 @@ local function on_nth_tick_handler()
     end
 end
 
---- (Re)register the nth-tick handler to match storage.scheduler.interval.
---- Reads storage only, writes nothing — the only entry point legal in on_load.
+--- (Re)register the nth-tick handler to match storage.scheduler.interval; the only entry point legal in on_load.
 function Scheduler.apply()
-    -- storage.scheduler is nil when loading a pre-M2 save: on_load fires before
-    -- on_configuration_changed gets the chance to create it.
-    local scheduler = storage.scheduler
+    local scheduler = storage.scheduler -- nil on a save where on_load fires before on_configuration_changed creates it
     local interval = scheduler and scheduler.interval
     if interval == registered_interval then
         return
@@ -64,9 +53,7 @@ function Scheduler.apply()
     end
 end
 
---- Rebuild the queue from connected players with any effective channel, recompute
---- the interval, then re-register. Call from events only (writes storage) —
---- never from on_load.
+--- Rebuild the queue from connected players with any effective channel, recompute the interval, re-register. Events only, never on_load.
 function Scheduler.rebuild()
     local queue = {}
     for _, player in pairs(game.connected_players) do
@@ -88,8 +75,7 @@ function Scheduler.rebuild()
     Scheduler.apply()
 end
 
---- State refresh handler signature (player unused: any change rebuilds the
---- whole queue — it is tiny).
+--- State refresh handler signature (player unused: any change rebuilds the whole queue).
 function Scheduler.refresh(_)
     Scheduler.rebuild()
 end

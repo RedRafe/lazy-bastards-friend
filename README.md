@@ -41,7 +41,7 @@ per-player preference, editable from the in-game panel or mirrored mod settings.
 
 ## Links
 
-- [Design document](DESIGN.md) — full behavior spec and implementation notes
+- [Architecture](.vscode/ARCHITECTURE.md) — module layout and how the pieces fit together
 - [Remote API](docs/API.md) — scripting interface for other mods/scenarios
 
 ---

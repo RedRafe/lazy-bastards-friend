@@ -1,7 +1,4 @@
---- L09 — SPM watchdog auto-retirement and the admin GUI:
---- labs are pre-wired to consume science the moment they get packs, the
---- threshold is lowered so retirement trips within seconds instead of needing a
---- real factory, and the intro points at /lbf-admin for the lock/bulk-action UI.
+--- L09 — SPM watchdog auto-retirement and the admin GUI: labs consume science the moment they get packs, the threshold is lowered so retirement trips within seconds, and the intro points at /lbf-admin for the lock/bulk-action UI.
 
 local Bench = require('__lazy-bastards-friend__.scripts.tests.lib.bench')
 local Harness = require('__lazy-bastards-friend__.scripts.tests.lib.harness')
@@ -21,9 +18,7 @@ local KIT = {
     ['automation-science-pack'] = 200,
 }
 
--- 'automation' only costs 10 packs, so with two labs it finishes in seconds —
--- long before 3 consecutive over-threshold watchdog checks (601 ticks apart)
--- can land. Re-queue it forever so the labs never run dry mid-test.
+-- 'automation' finishes in seconds with two labs, long before 3 consecutive over-threshold watchdog checks can land — re-queue it forever so the labs never run dry mid-test.
 local function requeue_research()
     local force = game.forces.player
     local technology = force.technologies['automation']
@@ -39,8 +34,7 @@ Event.on_init(function()
     Bench.spawn(surface, game.forces.player, BENCH)
     Bench.research(game.forces.player, { 'automation-science-pack' })
     game.forces.player.add_research('automation')
-    -- Runtime-global settings can only be written by their owning mod, so the
-    -- threshold change goes through the remote interface (docs/API.md).
+    -- Runtime-global settings can only be written by their owning mod, so the threshold change goes through the remote interface (docs/API.md).
     remote.call('lazy-bastards-friend', 'set_spm_threshold', SPM_THRESHOLD)
 end)
 

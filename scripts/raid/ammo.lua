@@ -1,5 +1,4 @@
---- Pass 5: feed ammo (DESIGN.md §1.1). Gated by `feed_combat` (state.lua's
---- TREE_DEF) rather than its own channel — see DESIGN.md §1/§12.
+--- Pass 5: feed ammo. Gated by `feed_combat` (state.lua's TREE_DEF) rather than its own channel.
 
 local Shared = require('__lazy-bastards-friend__.scripts.raid.shared')
 
@@ -28,9 +27,7 @@ local function get_player_ammo(totals, reserves)
     return ammo
 end
 
---- Ammo to feed this turret: top up what it already holds, else the best
---- (highest prototype order — vanilla orders ascend by tier) carried ammo
---- matching the turret's categories.
+--- Ammo to feed this turret: top up what it already holds, else the best (highest prototype order — vanilla orders ascend by tier) carried ammo matching its categories.
 --- @param turret LuaEntity
 --- @param ammo_inventory LuaInventory
 --- @param candidates LbfAmmoCandidate[]
@@ -45,9 +42,7 @@ local function pick_ammo(turret, ammo_inventory, candidates, totals, reserves)
         end
         return nil
     end
-    -- Artillery turrets have no attack_parameters (they live on the gun
-    -- prototype), so fall back to asking the ammo inventory itself — it
-    -- enforces the accepted ammo category on insert.
+    -- Artillery turrets have no attack_parameters (they live on the gun prototype); fall back to asking the ammo inventory itself, which enforces the accepted category on insert.
     local params = turret.prototype.attack_parameters
     local categories = params and params.ammo_categories
     local best
@@ -88,8 +83,7 @@ function Ammo.pass(entities, main, totals, reserves, report)
                 if ammo_inventory then
                     local name = pick_ammo(turret, ammo_inventory, candidates, totals, reserves)
                     if name then
-                        -- One stack is the wrong ceiling for artillery (shells
-                        -- stack to 1): allow what inserters would load instead.
+                        -- One stack is the wrong ceiling for artillery (shells stack to 1): allow what inserters would load instead
                         local cap = math.max(
                             turret.prototype.automated_ammo_count or 0,
                             prototypes.item[name].stack_size

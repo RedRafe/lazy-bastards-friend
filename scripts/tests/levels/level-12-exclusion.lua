@@ -1,8 +1,4 @@
---- L12 — Per-entity exclusion (DESIGN.md §10.4, M5). One furnace, excluded via
---- the remote interface before the player ever gets near it (mirrors the
---- hover+hotkey flow without needing mouse input in an automated scenario).
---- Confirms the fuel pass skips it while excluded, then feeds it normally
---- once un-excluded.
+--- L12 — Per-entity exclusion. One furnace, excluded via the remote interface before the player gets near it (mirrors the hover+hotkey flow without mouse input). Confirms the fuel pass skips it while excluded, then feeds it once un-excluded.
 
 local Bench = require('__lazy-bastards-friend__.scripts.tests.lib.bench')
 local Harness = require('__lazy-bastards-friend__.scripts.tests.lib.harness')
@@ -46,8 +42,7 @@ Event.add(defines.events.on_player_created, function(event)
         return remote.call('lazy-bastards-friend', 'is_entity_excluded', player.index, furnace.unit_number) == true
     end)
 
-    -- Long enough that, if exclusion didn't work, the fuel pass would have
-    -- topped the furnace up well before this window closes.
+    -- Long enough that, if exclusion didn't work, the fuel pass would have topped the furnace up before this window closes.
     Harness.watch('furnace stays unfueled while excluded', function()
         local fuel = furnace.get_fuel_inventory()
         return fuel and not fuel.is_empty()

@@ -1,6 +1,4 @@
---- L03 — Collect channel, output pass. Furnaces and assemblers pre-loaded so they
---- are actively producing; the Collect channel should pull finished plates/gears
---- out of their output slots into the player inventory without being asked.
+--- L03 — Collect channel, output pass. Furnaces and assemblers pre-loaded so they're actively producing; the Collect channel should pull finished plates/gears into the player inventory unasked.
 
 local Bench = require('__lazy-bastards-friend__.scripts.tests.lib.bench')
 local Harness = require('__lazy-bastards-friend__.scripts.tests.lib.harness')

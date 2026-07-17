@@ -1,5 +1,4 @@
---- Pass 3: feed fuel (DESIGN.md §1.1). Tops up whatever's already loaded in a
---- burner, else the best carried fuel it accepts.
+--- Pass 3: feed fuel. Tops up whatever's already loaded in a burner, else the best carried fuel it accepts.
 
 local Transfer = require('__lazy-bastards-friend__.scripts.lib.transfer')
 local Shared = require('__lazy-bastards-friend__.scripts.raid.shared')
@@ -11,9 +10,7 @@ local Fuel = {}
 --- @field category string
 --- @field value double
 
---- Spareable fuel items the player carries, best (highest fuel value) first —
---- nuclear before rocket fuel before solid fuel before coal before wood, all
---- derived from prototype fuel values. Reserves are the tool to hold good fuel back.
+--- Spareable fuel items the player carries, best (highest fuel value) first — derived from prototype fuel values; reserves are the tool to hold good fuel back.
 --- @param totals table<string, integer>
 --- @param reserves table<string, integer>
 --- @return LbfFuelCandidate[]
@@ -34,10 +31,7 @@ local function get_player_fuels(totals, reserves)
     return fuels
 end
 
---- Fuel to feed this entity: top up whatever is already loaded, else the
---- best carried fuel its burner accepts. Records starved/saturated entities
---- for the optional starvation feedback (DESIGN.md §10.10) when the caller
---- passes those lists (nil when the flag is off — no extra cost).
+--- Fuel to feed this entity: top up whatever is already loaded, else the best carried fuel its burner accepts; records starved/saturated entities when the caller passes those lists.
 --- @param entity LuaEntity
 --- @param fuel_inventory LuaInventory
 --- @param fuels LbfFuelCandidate[]
@@ -55,8 +49,7 @@ local function pick_fuel(entity, fuel_inventory, fuels, totals, reserves, starve
             end
             return current
         end
-        -- Fuel slots are usually single; mixing in a second fuel type can't
-        -- work anyway, so if the player can't spare this one, skip the entity.
+        -- Fuel slots are usually single; if the player can't spare this fuel, skip the entity rather than mix in a second type
         if starved then
             starved[#starved + 1] = entity
         end

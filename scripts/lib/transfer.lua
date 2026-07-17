@@ -1,12 +1,8 @@
---- Stack-preserving inventory-to-inventory transfers (DESIGN.md §7).
---- Reimplemented from scratch; reference: reference/even-distribution.lua
---- (transfer). Preserves quality, health, durability, ammo, spoilage and tags;
---- never spills — whatever the destination can't take stays in the source.
+--- Stack-preserving inventory-to-inventory transfers. Reimplemented from scratch; reference: reference/even-distribution.lua (transfer). Preserves quality, health, durability, ammo, spoilage and tags; never spills — leftovers stay in the source.
 
 local Transfer = {}
 
--- Items whose extra data (equipment grids, blueprints, entity data) would be
--- destroyed by a plain LuaInventory.insert; these move whole-stack only.
+-- Items whose extra data (equipment grids, blueprints, entity data) would be destroyed by a plain LuaInventory.insert; these move whole-stack only.
 local complex_types = {
     ['item-with-entity-data'] = true,
     ['armor'] = true,
@@ -48,8 +44,7 @@ local function move_stack(stack, dest, limit)
         spoil_percent = stack.spoil_percent,
     }
     if spec.ammo and spec.ammo < 1 then
-        -- The game occasionally hands out stacks with ammo == 0 even though it
-        -- shouldn't be possible; insert() rejects those.
+        -- The game occasionally hands out stacks with ammo == 0; insert() rejects those.
         spec.ammo = 1
     end
     local inserted = dest.insert(spec)
@@ -59,8 +54,7 @@ local function move_stack(stack, dest, limit)
     return inserted
 end
 
---- Move up to `limit` items from a free-standing stack (e.g. an item-entity's)
---- into an inventory, with the same data preservation as inventory transfers.
+--- Move up to `limit` items from a free-standing stack (e.g. an item-entity's) into an inventory, with the same data preservation as inventory transfers.
 --- @param stack LuaItemStack valid_for_read
 --- @param dest LuaInventory
 --- @param limit integer? defaults to the whole stack
@@ -108,9 +102,7 @@ function Transfer.give(source, dest, name, count)
     return moved
 end
 
---- Count items named `name` (any quality) by iterating stacks — avoids the
---- quality-defaulting ambiguity of LuaInventory.get_item_count. Only use on
---- small inventories (fuel/ammo slots).
+--- Count items named `name` (any quality) by iterating stacks — avoids the quality-defaulting ambiguity of LuaInventory.get_item_count. Only use on small inventories (fuel/ammo slots).
 --- @param inventory LuaInventory
 --- @param name string
 --- @return integer

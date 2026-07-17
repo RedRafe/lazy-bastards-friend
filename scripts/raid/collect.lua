@@ -1,6 +1,4 @@
---- Pass 1+2: collect outputs/burnt results, optionally chests and ground items
---- (DESIGN.md §1.1, §1.4). Shared collect sources get split fairly with other
---- players still due this scheduler sweep instead of taken whole.
+--- Pass 1+2: collect outputs/burnt results, optionally chests and ground items; shared sources get split fairly with other players still due this sweep instead of taken whole.
 
 local State = require('__lazy-bastards-friend__.scripts.state')
 local Transfer = require('__lazy-bastards-friend__.scripts.lib.transfer')
@@ -15,10 +13,7 @@ local Collect = {}
 --- @field square boolean
 --- @field chests boolean
 
---- Other players still due in this sweep whose service area may overlap ours:
---- shared collect sources get split with them instead of taken whole (§1.4).
---- Players already serviced this sweep took their share when it was their turn.
---- Returns nil when nobody contests — the fast path costs one loop over `pending`.
+--- Other players still due in this sweep whose service area may overlap ours (already-serviced players took their share on their turn); nil when nobody contests.
 --- @param player LuaPlayer
 --- @param pending uint[]?
 --- @return LbfRival[]?
@@ -55,8 +50,7 @@ function Collect.get_rivals(player, pending)
     return rivals
 end
 
---- How many players get a cut of this entity: us + every rival whose area
---- covers it (their AoE shape is their search shape, §5).
+--- How many players get a cut of this entity: us + every rival whose area covers it (their AoE shape is their search shape).
 --- @param entity LuaEntity
 --- @param rivals LbfRival[]
 --- @param is_chest boolean chests only count rivals who take from chests
@@ -81,8 +75,7 @@ local function claim_divisor(entity, rivals, is_chest)
     return k
 end
 
---- Take a 1/k share of each item in the source (by name, across qualities).
---- The floor remainder stays put for the players still due this sweep.
+--- Take a 1/k share of each item in the source (by name, across qualities); the floor remainder stays put for the players still due this sweep.
 --- @param source LuaInventory
 --- @param dest LuaInventory
 --- @param k integer
@@ -104,8 +97,7 @@ local function take_share(source, dest, k, report)
     end
 end
 
---- Scoop one ground stack whole — no fair-share split; a single dropped stack
---- is not worth the shape checks.
+--- Scoop one ground stack whole — no fair-share split; a single dropped stack isn't worth the shape checks.
 --- @param entity LuaEntity item-entity
 --- @param main LuaInventory
 --- @param report LbfReport

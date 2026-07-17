@@ -1,27 +1,18 @@
---- SPM watchdog: auto-retire Collect+Feed (and optionally Combat)
---- once the factory's science throughput passes the threshold. 
---- Uses the built-in hidden `science` item that labs consume in production statistics.
---- Conditional nth-tick like the scheduler:
---- zero cost when disabled, tripped, or with nothing left to retire.
+--- SPM watchdog: auto-retires Collect+Feed once science throughput passes the threshold; conditional nth-tick like the scheduler.
 
 local State = require('__lazy-bastards-friend__.scripts.state')
 local Event = require('__lazy-bastards-friend__.scripts.lib.event')
 
 local Watchdog = {}
 
--- 601, not a round 600: the scheduler's nth-tick interval can be any value up
--- to lbf-update-period's maximum (600). Registering through Event.on_nth_tick
--- means a collision would fan out rather than clobber, but keeping this
--- disjoint still avoids running the check mid-scheduler-sweep for no reason.
-local CHECK_INTERVAL = 601
+local CHECK_INTERVAL = 601 -- disjoint from the scheduler's interval (max 600), avoids mid-sweep collisions
 local STRIKES_TO_TRIP = 3 -- consecutive over-threshold checks before retiring
 
 --- Mirrors the nth-tick registration; rebuilt from storage on every load.
 --- @type boolean
 local registered = false
 
--- Called after every measurement so open admin GUIs can refresh their SPM
--- readout (control.lua wires this; a direct require would be circular).
+-- Called after every measurement to refresh open admin GUIs (wired by control.lua to avoid a circular require).
 --- @type fun()[]
 local check_listeners = {}
 
@@ -45,8 +36,7 @@ function Watchdog.spm(force)
     return total
 end
 
---- 'armed' = will retire when SPM stays over threshold; 'tripped' = already
---- retired; 'disabled' = turned off by setting; 'idle' = nothing left to stop.
+--- 'armed'/'tripped'/'disabled'/'idle'.
 --- @return 'armed'|'tripped'|'disabled'|'idle'
 function Watchdog.status()
     if storage.auto_disabled then
@@ -61,12 +51,10 @@ end
 local function trip()
     storage.auto_disabled = true
     storage.spm_strikes = 0
-    -- 'feed_combat' is a tree child of 'feed' (DESIGN.md §12): stopping feed
-    -- already stops turret-feeding too, no separate write needed.
     State.set_master('collect', false)
-    State.set_master('feed', false)
+    State.set_master('feed', false) -- also stops turret-feeding, a child of 'feed'
     game.print({ 'lbf-message.retired' })
-    State.refresh_all() -- renders, GUIs, shortcut indicators, scheduler, and this watchdog
+    State.refresh_all()
 end
 
 local function check()
@@ -91,8 +79,7 @@ local function check()
     end
 end
 
---- (Re)register the nth-tick handler to match storage.watchdog_armed.
---- Reads storage only — the only entry point legal in on_load.
+--- (Re)register the nth-tick handler to match storage.watchdog_armed; the only entry point legal in on_load.
 function Watchdog.apply()
     local armed = storage.watchdog_armed == true
     if armed == registered then
@@ -106,10 +93,7 @@ function Watchdog.apply()
     end
 end
 
---- The admin on/off switch (admin GUI Watchdog tab, remote API). Switching ON
---- also un-trips and re-arms after an auto-retirement — the only re-arm path,
---- since re-enabling the channel masters deliberately does not (§2.1).
---- Notifies check listeners so open admin GUIs repaint immediately.
+--- Admin on/off switch; turning it on also un-trips and re-arms (the only re-arm path).
 --- @param value boolean
 function Watchdog.set_enabled(value)
     if value then
@@ -117,8 +101,7 @@ function Watchdog.set_enabled(value)
     end
     storage.spm_strikes = 0
     if settings.global['lbf-watchdog-enabled'].value ~= value then
-        -- Fires on_runtime_mod_setting_changed, whose handler rebuilds too.
-        settings.global['lbf-watchdog-enabled'] = { value = value }
+        settings.global['lbf-watchdog-enabled'] = { value = value } -- fires the setting-changed handler, which rebuilds too
     end
     Watchdog.rebuild()
     for _, listener in pairs(check_listeners) do
@@ -126,13 +109,9 @@ function Watchdog.set_enabled(value)
     end
 end
 
---- Recompute whether the watchdog should run, persist it, re-register.
---- Call from events only (writes storage) — never from on_load.
+--- Recompute whether the watchdog should run, persist it, re-register. Events only, never on_load.
 function Watchdog.rebuild()
     local active = storage.settings
-    -- Nothing to retire while the global switch is off (§4.3 "Everyone" row).
-    -- 'feed_combat' isn't checked separately — it's a tree child of 'feed'
-    -- now, so stopping feed always stops it too (DESIGN.md §12).
     local stops_anything = active.mod.enabled and (active.collect.enabled or active.feed.enabled)
     storage.watchdog_armed = (
         settings.global['lbf-watchdog-enabled'].value == true

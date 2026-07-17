@@ -1,17 +1,11 @@
---- Minimal pass/fail assertion framework for test-bench levels that can verify
---- themselves instead of relying on a human staring at a furnace (DESIGN.md-style
---- "the mod behaves correctly" checks). Levels that are inherently manual (GUI
---- interaction, multiplayer fairness) skip this and just use Bench.intro.
+--- Minimal pass/fail assertion framework for test-bench levels that can verify themselves; inherently manual levels (GUI interaction, multiplayer fairness) skip this and just use Bench.intro.
 ---
 --- Usage from a level file:
 ---   local Harness = require('__lazy-bastards-friend__.scripts.tests.lib.harness')
 ---   Harness.check('threshold applied', function() return remote.call(...) == 5 end)
 ---   Harness.eventually('furnace got fuel', function() return furnace.get_fuel_inventory().get_item_count('coal') > 0 end, 600)
 ---   Harness.watch('reserve never violated', function() return player.get_main_inventory().get_item_count('coal') < 20 end, 3600)
---- Results render live in the on-screen panel (scripts/tests/lib/gui.lua) as
---- they resolve; call Harness.summary_after(ticks) once at the end of a
---- level's setup to finish the panel and print the final PASS/FAIL summary
---- once every check has settled.
+--- Results render live in the on-screen panel (scripts/tests/lib/gui.lua); call Harness.summary_after(ticks) once at the end of a level's setup to finish the panel once every check has settled.
 
 local Gui = require('__lazy-bastards-friend__.scripts.tests.lib.gui')
 
@@ -75,10 +69,7 @@ function Harness.eventually(name, condition, timeout_ticks)
     pending[#pending + 1] = { name = name, condition = condition, deadline = game.tick + timeout_ticks }
 end
 
---- Polls `violated` every 30 ticks; fails immediately (and permanently) the
---- moment it returns true, otherwise passes once `timeout_ticks` elapses
---- without a violation. For invariants that must hold continuously rather
---- than eventually become true.
+--- Polls `violated` every 30 ticks; fails immediately (and permanently) on first true, otherwise passes once `timeout_ticks` elapses — for invariants that must hold continuously.
 --- @param name string
 --- @param violated fun(): boolean
 --- @param timeout_ticks uint
@@ -88,12 +79,7 @@ function Harness.watch(name, violated, timeout_ticks)
     pending[#pending + 1] = { name = name, condition = violated, deadline = game.tick + timeout_ticks, watch = true }
 end
 
---- Finishes the results panel once every `eventually`/`watch` check registered
---- so far has resolved. The panel (scripts/tests/lib/gui.lua) is the sole
---- record of completion — its live Pending/Passed/Failed tiles and final
---- banner (set by Gui.finish) — nothing is printed to chat and the game
---- keeps running normally afterwards (no game_finished modal), so you can
---- keep poking at the admin GUI to debug a failure without the view freezing.
+--- Finishes the results panel once every `eventually`/`watch` check has resolved. The panel is the sole record of completion — nothing is printed to chat and the game keeps running (no game_finished modal), so you can keep poking at the admin GUI to debug a failure.
 --- @param delay_ticks uint how long to wait before finishing, should exceed the
 ---   longest `eventually`/`watch` timeout registered in this level
 local summary_scheduled = false

@@ -1,14 +1,8 @@
---- Small, commonly reused GUI building blocks shared by scripts/gui/ and
---- scripts/tests/lib/gui.lua. Kept dependency-free (no State/storage access)
---- so it can be required from any stage-appropriate module. Recurring looks
---- are lbf_* style prototypes (prototypes/styles.lua); set_style is for the
---- leftover one-off/dynamic tweaks.
+--- Small, commonly reused GUI building blocks shared by scripts/gui/ and scripts/tests/lib/gui.lua. Kept dependency-free (no State/storage access) so it can be required from any stage-appropriate module. Recurring looks are lbf_* style prototypes (prototypes/styles.lua); set_style is for leftover one-off/dynamic tweaks.
 
 local Gui = {}
 
---- Applies a style to a LuaGuiElement in one call, instead of a chain of
---- `element.style.x = y` lines (inspired by RedMew's utils/gui.lua Gui.set_style).
---- A string sets the style prototype; a table sets individual LuaStyle attributes.
+--- Applies a style to a LuaGuiElement in one call instead of a chain of `element.style.x = y` lines (inspired by RedMew's utils/gui.lua Gui.set_style). A string sets the style prototype; a table sets individual LuaStyle attributes.
 --- @param element LuaGuiElement
 --- @param style string|table<string, any>
 --- @return LuaGuiElement element, for chaining into the next add() call
@@ -24,11 +18,7 @@ function Gui.set_style(element, style)
     return element
 end
 
---- Adds a titlebar flow: an optional caption label, a stretching drag handle,
---- and an optional close button — the pattern shared by every screen-anchored
---- frame (admin panel, test-results panel). Pass `draggable = false` for
---- frames anchored in `player.gui.relative`/`.top` etc — `drag_target` is only
---- valid on frames living in `player.gui.screen` and errors otherwise.
+--- Adds a titlebar flow (caption label, stretching drag handle, optional close button) — the pattern shared by every screen-anchored frame. Pass `draggable = false` for frames in `player.gui.relative`/`.top` etc — `drag_target` is only valid on `player.gui.screen` frames and errors otherwise.
 --- @param frame LuaGuiElement frame the titlebar belongs to (and drags, unless draggable = false)
 --- @param options { name: string?, label_name: string?, caption: LocalisedString?, close_tags: table?, close_tooltip: LocalisedString? draggable: boolean? }?
 --- @return LuaGuiElement titlebar
@@ -69,17 +59,7 @@ function Gui.add_pusher(element)
     return element.add({ type = 'empty-widget', style = 'lbf_pusher' })
 end
 
---- Builds an action-keyed GUI event dispatcher, replacing the if/elseif
---- cascades a flat `element.tags[key]` switch tends to grow into (inspired by
---- reference/gui.lua's per-event handler_factory, generalized to route many
---- event types through one tags-keyed table instead of one table per event).
---- Keying on tags rather than `element.name` is deliberate: sibling elements
---- in a table/list often share a handler but can't share a name (or have no
---- name at all), while their tags can carry both the action and any per-row
---- data (item, channel, player_index, ...).
---- `on(action, handler)` asserts the action isn't already registered — a
---- silent second registration would just shadow the first one and the bug
---- would only show up as "my handler never fires".
+--- Builds an action-keyed GUI event dispatcher, replacing if/elseif cascades over `element.tags[key]` (inspired by reference/gui.lua's handler_factory, generalized across event types). Keys on tags rather than `element.name` since sibling elements often share a handler but not a name, and tags can carry per-row data too. `on(action, handler)` asserts against silent double-registration, which would otherwise just shadow the first handler.
 --- @param key string tags field the action is read from (e.g. 'lbf_action')
 --- @return function on function(action: string, handler: function(event, element, tags, player))
 --- @return function dispatch function(event) — pass to `on(defines.events..., dispatch)`
@@ -112,11 +92,7 @@ function Gui.new_dispatcher(key)
     return on, dispatch
 end
 
---- Adds a collapsible section: a `subheader_frame` header (caption + an
---- expand/collapse arrow) sitting above a body flow the caller fills in and
---- whose visibility the arrow controls. Expand state is not tracked here —
---- the caller owns and persists it (per-player UI prefs), and drives the
---- arrow sprite / body visibility itself on sync.
+--- Adds a collapsible section: a `subheader_frame` header (caption + expand/collapse arrow) above a body flow the caller fills in. Expand state isn't tracked here — the caller owns/persists it and drives arrow sprite / body visibility on sync.
 --- @param parent LuaGuiElement
 --- @param id string unique section id; elements are named 'lbf-section-<id>' and nested 'header'/'body'
 --- @param caption LocalisedString
@@ -141,22 +117,7 @@ function Gui.add_collapsible(parent, id, caption, tags, tooltip)
     return outer, body
 end
 
---- Adds a "family section": a plain vertical flow (no frame/border of its
---- own — nesting frames-in-frames here is what used to draw extra dividers
---- between sections) holding an optional borderless header row (family
---- icon, bold caption, a divider line filling the rest of the width, then an
---- expand/collapse arrow) above an inside_shallow_frame body the caller
---- fills in. Collapsing hides the body-frame, leaving just the header row.
---- `tags` is applied to every element in the header row (flow, icon, label,
---- line, arrow), not just the arrow button, so clicking anywhere on the
---- header toggles the section — not just the small arrow hitbox.
---- Pass sprite = nil for a headerless section (just the body-frame) — used
---- for the top master-switch strip, which reads as a section but has
---- nothing to collapse. A sibling of add_collapsible with the same contract
---- (expand state is not tracked here — the caller owns/persists it and
---- drives the arrow sprite / body-frame visibility itself on sync). Element
---- tree: 'lbf-section-<id>' > 'header-flow'? (icon/label/line/arrow),
---- 'body-frame' > 'body'.
+--- Adds a "family section": a plain vertical flow (no frame of its own — avoids nested-frame dividers) holding an optional borderless header row (icon, caption, divider line, expand/collapse arrow) above an inside_shallow_frame body the caller fills in; collapsing hides the body-frame. `tags` applies to every header element so clicking anywhere on the header toggles the section, not just the arrow hitbox. Pass sprite = nil for a headerless section (just the body-frame, e.g. the top master-switch strip). Sibling of add_collapsible with the same contract (caller owns/persists expand state). Element tree: 'lbf-section-<id>' > 'header-flow'? (icon/label/line/arrow), 'body-frame' > 'body'.
 --- @param parent LuaGuiElement must already be a frame — this doesn't add its own
 --- @param id string unique section id; elements are named 'lbf-section-<id>' and nested 'header-flow'/'body-frame'
 --- @param sprite string? family icon shown at the left of the header; omit (with caption/tags/tooltip) for no header

@@ -1,17 +1,6 @@
---- Generic hierarchical settings tree: a small, reusable class with no
---- LBF-specific knowledge beyond the tree definition passed to `.new`.
----
---- Each node has a global layer (`{ enabled }`, admin bulk switch) and a
---- per-player layer (`{ enabled, allowed }` — the player's own preference and
---- whether an admin allows it). A node is *effective* for a player iff every
---- node from the root down to it, inclusive, has global.enabled AND
---- player.enabled AND player.allowed. Writes never cascade: setting a parent
---- only gates descendants' effective state, it never touches their stored
---- values (DESIGN.md §2 — masters don't touch prefs).
----
---- Inspired by RedMew's danger_ores `configuration.lua` (one declarative table
---- of features, each with an `enabled` flag) extended with the admin-lock and
---- parent/child gating this mod needs.
+--- Generic hierarchical settings tree, reusable with no LBF-specific knowledge beyond the tree def passed to `.new`.
+--- Each node has a global layer (`{ enabled }`, admin bulk switch) and a per-player layer (`{ enabled, allowed }`); a node is *effective* iff every node root-to-it has global.enabled AND player.enabled AND player.allowed. Writes never cascade — masters gate, they don't touch prefs.
+--- Inspired by RedMew's danger_ores `configuration.lua`, extended with admin-lock and parent/child gating.
 
 local SettingsTree = {}
 SettingsTree.__index = SettingsTree
@@ -119,14 +108,7 @@ function SettingsTree:effective(global, player, id)
     return true
 end
 
---- Whether `id` can be toggled by its own player at all right now, i.e.
---- ignoring every ancestor's (and its own) *player* preference — a player can
---- always edit their own prefs, even ones that currently have no effect
---- because something above them is off (DESIGN.md §2: a player's own toggles
---- never grey their own children, only admin-side controls do). Only the
---- global (admin bulk) switch and the admin lock, at any level from the root
---- down to `id` inclusive, can make this false. Checked root-down, so a
---- master-level block is reported before a more specific one closer to `id`.
+--- Whether `id` can be toggled by its own player right now, ignoring player-preference state (a player can always edit their own prefs, even ones currently without effect); only the admin global/allowed layer, root-to-`id`, can block it. Checked root-down so the most general block is reported first.
 --- @param global table<string, {enabled: boolean}>
 --- @param player table<string, {enabled: boolean, allowed: boolean}>
 --- @param id string

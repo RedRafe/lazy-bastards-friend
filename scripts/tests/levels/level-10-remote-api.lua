@@ -1,7 +1,4 @@
---- L10 — Remote interface smoke test (docs/API.md). Fully automated: no bench,
---- no player interaction needed, just exercise every `lazy-bastards-friend`
---- remote call and report PASS/FAIL for each in the results panel. Useful as
---- a fast regression check after touching scripts/remote.lua.
+--- L10 — Remote interface smoke test (docs/API.md). Fully automated: exercises every `lazy-bastards-friend` remote call and reports PASS/FAIL in the results panel; a fast regression check after touching scripts/remote.lua.
 
 local Harness = require('__lazy-bastards-friend__.scripts.tests.lib.harness')
 local Gui = require('__lazy-bastards-friend__.scripts.tests.lib.gui')
@@ -45,8 +42,7 @@ Event.add(defines.events.on_player_created, function(event)
         return not ok
     end)
 
-    -- 'combat' is no longer a channel (§1/§12 "vertical" refactor) — it's a
-    -- plain per-player flag under Feed's chain, gated by lock_player('feed').
+    -- 'combat' is not a channel — it's a plain per-player flag under Feed's chain, gated by lock_player('feed').
     Harness.check('unknown channel "combat" is rejected', function()
         local ok = pcall(call, 'get_active', 'combat')
         return not ok
@@ -68,10 +64,7 @@ Event.add(defines.events.on_player_created, function(event)
         return locked_off and unlocked_on
     end)
 
-    -- 'feed_combat' has no admin lock/channel of its own (§1/§12): locking
-    -- Feed is the only way an admin stops it now. get_player_state has no
-    -- `effective.feed_combat` entry to read (it's a flag, not a channel), so
-    -- this only asserts the one lock path that actually gates it still works.
+    -- 'feed_combat' has no admin lock/channel of its own: locking Feed is the only way to stop it, and get_player_state has no `effective.feed_combat` entry to read, so this only asserts that lock path still works.
     Harness.check('lock_player("feed") is the only admin lock reaching feed_combat', function()
         call('lock_player', player.index, 'feed', true)
         local feed_locked = call('get_player_state', player.index).effective.feed == false

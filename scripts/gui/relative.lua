@@ -1,32 +1,16 @@
---- Per-player settings panel, anchored to the character screen (DESIGN.md §4.2).
---- Starts collapsed to a single blue icon button that opens the panel; once
---- opened, content is a stack of "family sections" (GuiUtil.add_family_section)
---- — each a plain vertical flow (no frame of its own, so siblings don't draw
---- extra dividers between each other) holding an inside_shallow_frame body,
---- with an optional borderless header row above it (family icon, bold
---- caption, a divider line, a collapse arrow). The On/Off switch (the
---- per-player master, data.settings.mod) plus the admin-panel button sit in
---- the first section, which has no header/collapse control of its own. Then
---- Feed and Collect (each one strip of sprite-buttons: the channel's own
---- master button followed by its child flag buttons), Appearance (the
---- channel's master switch on the left, a vertical divider, then radius,
---- opacity, and a strip of five buttons — shape plus four flags — stacked on
---- the right; colors below), and Reserved items — these four do have the
---- collapsible header. Every checkbox in the
---- panel is a sprite-button (icon + a two-line tooltip — bold title, then
---- description, plus a warning line when admin-blocked) rather than a
---- checkbox with caption text. Open/closed and per-section expand state are
---- per-player UI prefs (State.default_ui, data.ui) that persist like any
---- other preference.
---- All interactions route through tags (element.tags.lbf_action), never element names.
+--- Per-player settings panel, anchored to the character screen. Starts collapsed to a single blue icon button;
+--- once opened, content is a stack of "family sections" (GuiUtil.add_family_section) holding an
+--- inside_shallow_frame body with an optional collapsible header. The master On/Off switch plus admin-panel button
+--- sit in the first (headerless) section; then Feed/Collect (each a strip of sprite-buttons: channel master +
+--- child flags), Appearance (master switch, radius/opacity sliders, a five-button flag strip, colors below), and
+--- Reserved items. Every checkbox is a sprite-button (icon + two-line tooltip) rather than a caption checkbox.
+--- Open/closed and per-section expand state are per-player UI prefs (State.default_ui, data.ui). All interactions
+--- route through tags (element.tags.lbf_action), never element names.
 ---
---- Internally organized as five local "classes" (plain tables, no metatables
---- needed — one instance per game, not per player): Shared (scaffolding used
---- by everything below), Reserves (the reserved-items editor subsystem —
---- cohesive enough to own its own build/sync/actions), Build (Gui.build's
---- tree construction), Sync (Gui.sync's storage->widget push), and Actions
---- (the remaining panel-wide action handlers). Declared upfront so they can
---- reference each other regardless of definition order (DESIGN.md §12).
+--- Internally organized as five local "classes" (plain tables, one instance per game): Shared (scaffolding),
+--- Reserves (the reserved-items editor subsystem), Build (Gui.build's tree construction), Sync (Gui.sync's
+--- storage->widget push), and Actions (remaining panel-wide handlers). Declared upfront to reference each other
+--- regardless of definition order.
 
 local State = require('__lazy-bastards-friend__.scripts.state')
 local GuiUtil = require('__lazy-bastards-friend__.scripts.lib.gui')
@@ -56,18 +40,10 @@ local ANCHOR = {
     position = defines.relative_gui_position.right,
 }
 
--- The two user-facing behavior sections (Feed, Collect — each its own
--- top-level bordered section now, not a row nested under one "Behavior"
--- section). Each is one strip of sprite-buttons: the channel's own master
--- button ("Feed machines" / "Collect from machines") followed by its child
--- flag buttons (tree node ids, `flags`) in the same row — no separate
--- advanced-options expander anymore. 'feed_combat' ("Feed turrets") is a true
--- tree child of 'feed' (DESIGN.md §1/§12) with no admin lock/master of its
--- own — a plain preference like feed_fuel, just placed here in Feed's flag
--- list. 'starvation'/'show-others' live in the Appearance section below —
--- they're tree children of the 'appearance' channel now, not 'feed', so
--- admins can lock the whole render channel independently even though
--- raid.lua only ever populates starvation data during a feed pass.
+-- The two user-facing behavior sections (Feed, Collect), each its own top-level bordered section: one strip of
+-- sprite-buttons, the channel's own master button followed by its child flag buttons in the same row. 'feed_combat'
+-- is a plain tree child of 'feed' placed in Feed's flag list. 'starvation'/'show-others' live in Appearance instead
+-- since they're tree children of the 'appearance' channel, so admins can lock that render channel independently.
 local BEHAVIOR_GROUPS = {
     {
         id = 'feed',
@@ -81,9 +57,8 @@ local BEHAVIOR_GROUPS = {
     },
 }
 
--- Logistic group prefix whose minimum values the import button copies into reserves (§6).
--- Matched case-insensitively as "lbf::<player-name>"; a matching group is renamed to the
--- canonical "LBF::<player-name>" (using the player's exact name) after a successful import.
+-- Logistic group prefix whose minimum values the import button copies into reserves. Matched case-insensitively
+-- as "lbf::<player-name>"; renamed to the canonical "LBF::<player-name>" after a successful import.
 local IMPORT_GROUP_TAG = 'LBF'
 
 local COLOR_COMPONENTS = { 'r', 'g', 'b' }
@@ -93,18 +68,14 @@ local COLOR_SLIDER_STYLE = { r = 'red_slider', g = 'green_slider', b = 'blue_sli
 
 local TOP_SECTIONS = { 'feed', 'collect', 'appearance', 'reserves' }
 
--- Behavior/appearance flag ids carry a family prefix (feed_/collect_/
--- appearance_ — see state.lua's TREE_DEF; also the public remote-API flag
--- names). Locale keys predate that prefix, so strip it back off before
--- building 'lbf-gui.flag-<...>' — e.g. 'feed_fuel' -> 'lbf-gui.flag-fuel'.
+-- Behavior/appearance flag ids carry a family prefix (feed_/collect_/appearance_ — see state.lua's TREE_DEF; also
+-- the public remote-API flag names). Locale keys predate the prefix, so strip it before building
+-- 'lbf-gui.flag-<...>' — e.g. 'feed_fuel' -> 'lbf-gui.flag-fuel'.
 local FAMILY_PREFIXES = { 'feed_', 'collect_', 'appearance_' }
 
--- Sprite suffix for each child flag's 'lbf-flag-<suffix>' icon (tools/
--- make_flag_icons.py). Independent of Shared.locale_suffix's family-prefix
--- stripping — some flags need a different (shorter/hyphenated) suffix than
--- their locale key, e.g. appearance_show_others_area -> 'show-others', not
--- 'show_others_area'. Channels aren't listed here: they're rendered as an
--- Shared.add_channel_switch, not a sprite-button.
+-- Sprite suffix for each child flag's 'lbf-flag-<suffix>' icon (tools/make_flag_icons.py). Independent of
+-- Shared.locale_suffix's prefix-stripping — some flags need a shorter/hyphenated suffix than their locale key,
+-- e.g. appearance_show_others_area -> 'show-others'. Channels aren't listed: rendered via add_channel_switch.
 local FLAG_SPRITE_SUFFIX = {
     feed_fuel = 'fuel',
     feed_ingredients = 'ingredients',
@@ -119,16 +90,10 @@ local FLAG_SPRITE_SUFFIX = {
     appearance_summary = 'summary',
 }
 
--- 'appearance' (formerly 'appearance_fill')/'appearance_show_others_area'
--- predate the settings tree and keep their own locale keys (built alongside
--- their sliders/extra tooltips) rather than the generic 'channel-'/
--- 'flag-<suffix>' patterns. 'appearance_use_player_color' joined them
--- (2026-07-17): its existing locale keys are hyphenated
--- (`flag-use-player-color`) while Shared.locale_suffix's family-prefix strip
--- would derive the underscored `flag-use_player_color` — same reason
--- 'appearance_show_others_area' needed an override. 'appearance_summary'
--- needed no override: locale_suffix strips 'appearance_' down to 'summary',
--- which already matches its pre-existing `flag-summary` key exactly.
+-- 'appearance'/'appearance_show_others_area' predate the settings tree and keep their own locale keys rather than
+-- the generic 'channel-'/'flag-<suffix>' patterns. 'appearance_use_player_color' also needs an override since its
+-- locale key is hyphenated (`flag-use-player-color`) but locale_suffix would derive `flag-use_player_color`.
+-- 'appearance_summary' needs no override — locale_suffix's stripped 'summary' already matches `flag-summary`.
 local CAPTION_OVERRIDE = {
     appearance = 'lbf-gui.fill',
     appearance_show_others_area = 'lbf-gui.show-others',
@@ -140,8 +105,7 @@ local TOOLTIP_OVERRIDE = {
     appearance_use_player_color = 'lbf-gui.flag-use-player-color-tooltip',
 }
 
--- Area-shape button (Shared's lbf-shape): cycles circle/square rather than a
--- drop-down, matching the rest of the panel's icon-button look.
+-- Area-shape button (Shared's lbf-shape): cycles circle/square rather than a drop-down, matching the panel's icon-button look.
 local SHAPE_SPRITE = { circle = 'lbf-flag-circle', square = 'lbf-flag-square' }
 
 -- == Shared: scaffolding used by Reserves/Build/Sync/Actions == --
@@ -168,8 +132,7 @@ function Shared.add_section(content, id, sprite, caption, tooltip)
     return body
 end
 
---- The per-player master On/Off switch, at the top of the open panel
---- (mirrored by the toolbar shortcut).
+--- The per-player master On/Off switch, at the top of the open panel (mirrored by the toolbar shortcut).
 --- @param parent LuaGuiElement
 --- @return LuaGuiElement
 function Shared.add_master_switch(parent)
@@ -195,12 +158,9 @@ function Shared.locale_suffix(id)
     return id
 end
 
---- Builds a tooltip in the admin-open panel's format (Build's
---- 'lbf-admin-open' button): a bold/tinted title line, then the description,
---- with a warning appended as a third, alert-prefixed line when disabled.
---- Composed at runtime rather than baked into locale.cfg so the plain
---- caption/tooltip keys stay reusable elsewhere (e.g. [mod-setting-name]
---- reuses the same concepts unwrapped).
+--- Builds a tooltip in the admin-open panel's format: a bold/tinted title line, then the description, with a
+--- warning appended as a third alert-prefixed line when disabled. Composed at runtime rather than baked into
+--- locale.cfg so the plain caption/tooltip keys stay reusable elsewhere.
 --- @param title_key string locale key for the title half
 --- @param desc_key string locale key for the description half
 --- @param locked_reason string? 'global'|'allowed'|'parent'|nil — 'global'/'allowed' from
@@ -218,12 +178,9 @@ function Shared.flag_tooltip(title_key, desc_key, locked_reason)
     return tooltip
 end
 
---- Tooltip for the shape button: title, then "Selected: <type>" (its own
---- distinct formatting, not plain text, per the flag-button title styling
---- above), then the plain description, plus the same parent-off warning
---- line as Shared.flag_tooltip when the appearance channel above it is off —
---- shape is never admin-gated, but it is still a child of 'appearance' and
---- greys with it (2026-07-17).
+--- Tooltip for the shape button: title, then "Selected: <type>", then the plain description, plus the same
+--- parent-off warning as Shared.flag_tooltip when the appearance channel above it is off — shape is never
+--- admin-gated but is still a child of 'appearance' and greys with it.
 --- @param shape 'circle'|'square'
 --- @param locked boolean? true when the appearance channel above it is off
 --- @return LocalisedString
@@ -240,15 +197,10 @@ function Shared.shape_tooltip(shape, locked)
     return tooltip
 end
 
---- Whether `id`'s immediate parent (and transitively, everything above it) is
---- currently fully effective for this player — i.e. every switch from the
---- root down to (and including) the parent is on, both admin-side and the
---- player's own preference. A flag button's own clickability follows this
---- (DESIGN.md §2, revised): turning off a channel/master switch greys out
---- its children. Channel switches are themselves children of the top-level
---- mod switch, so this also greys them when the player's own master is off
---- (2026-07-17) — only the root mod switch never greys itself, since it has
---- no parent to be gated by.
+--- Whether `id`'s immediate parent (and transitively everything above it) is currently fully effective for this
+--- player — every switch from the root down to the parent is on, both admin-side and player preference. A flag
+--- button's clickability follows this: turning off a channel/master switch greys its children; only the root mod
+--- switch never greys itself since it has no parent.
 --- @param player_index uint
 --- @param id string tree node id
 --- @return boolean
@@ -257,8 +209,7 @@ function Shared.ancestor_effective(player_index, id)
     return parent == nil or State.effective(player_index, parent.id)
 end
 
---- The master On/Off switch for one family/channel (feed, collect,
---- appearance) — same widget as the top player-master switch, just tagged
+--- The master On/Off switch for one family/channel — same widget as the top player-master switch, just tagged
 --- with the channel id so the dispatcher/sync can target it.
 --- @param parent LuaGuiElement
 --- @param id string channel tree node id
@@ -291,9 +242,8 @@ function Shared.sync_channel_switch(switch, data, id, player_index)
     switch.tooltip = Shared.flag_tooltip(title_key, desc_key, reason)
 end
 
---- A vanilla shortcut_bar_inner_panel (no outer shortcut_bar_window_frame) to
---- hold a row of shortcut_bar_button flag buttons, matching the look of
---- Factorio's own shortcut bar.
+--- A vanilla shortcut_bar_inner_panel (no outer window_frame) to hold a row of flag buttons, matching Factorio's
+--- own shortcut bar look.
 --- @param parent LuaGuiElement
 --- @param name string element name for the panel
 --- @return LuaGuiElement panel add shortcut_bar_button children into this
@@ -301,9 +251,8 @@ function Shared.add_shortcut_panel(parent, name)
     return parent.add({ type = 'frame', name = name .. '-panel', style = 'shortcut_bar_inner_panel', direction = 'horizontal' })
 end
 
---- One sprite-button per settings-tree flag id, styled as a vanilla
---- shortcut-bar button (yellow highlight when toggled on, 40px). Sync fills
---- in `.toggled`/`.enabled`/`.tooltip`.
+--- One sprite-button per settings-tree flag id, styled as a vanilla shortcut-bar button (yellow highlight when
+--- toggled on, 40px). Sync fills in `.toggled`/`.enabled`/`.tooltip`.
 --- @param parent LuaGuiElement
 --- @param id string tree node id
 --- @return LuaGuiElement
@@ -317,13 +266,9 @@ function Shared.add_flag_button(parent, id)
     })
 end
 
---- Sync for a settings-tree flag's sprite-button: toggled (yellow highlight)
---- follows data.settings[id].enabled, greyed out with a warning-prefixed
---- tooltip when an admin-side control (global switch or lock, anywhere from
---- the root down to this node) blocks it, or when a switch above this one is
---- off — either the channel's own master or the player's own top-level
---- master (DESIGN.md §2, revised: switches always stay clickable themselves,
---- but now do grey their children).
+--- Sync for a settings-tree flag's sprite-button: toggled follows data.settings[id].enabled, greyed out with a
+--- warning tooltip when an admin-side control blocks it anywhere from root to this node, or when a switch above
+--- it is off. Switches always stay clickable themselves but do grey their children.
 --- @param button LuaGuiElement
 --- @param data LbfPlayerData
 --- @param id string tree node id
@@ -341,13 +286,11 @@ function Shared.sync_flag_button(button, data, id, player_index)
 end
 
 -- == Reserves: the reserved-items editor subsystem == --
--- Self-contained: its own grid, its own always-visible inline add/edit row,
--- its own import-from-logistics-group button, and its own action handlers.
--- Build/Sync only ever call Reserves.build/Reserves.sync for the section body
--- they own; nothing else in the file reaches into its private helpers below.
+-- Self-contained: its own grid, always-visible inline add/edit row, import-from-logistics-group button, and
+-- action handlers. Build/Sync only ever call Reserves.build/Reserves.sync; nothing else reaches into its helpers.
 
---- True when the rendered slots already show exactly these items and counts —
---- sync runs on every panel interaction, so skip the rebuild when nothing changed.
+--- True when the rendered slots already show exactly these items and counts — sync runs on every panel
+--- interaction, so skip the rebuild when nothing changed.
 --- @param grid LuaGuiElement
 --- @param reserves table<string, uint>
 --- @return boolean
@@ -369,9 +312,8 @@ local function reserve_slots_match(grid, reserves)
     return true
 end
 
---- One slot per reserved item (count on the number badge). New items are
---- added through the always-visible set-reserve editor row below the grid;
---- left-click loads a slot into that row for editing, right-click removes it.
+--- One slot per reserved item (count on the number badge); new items are added through the always-visible
+--- set-reserve editor row below the grid, left-click loads a slot for editing, right-click removes it.
 --- @param grid LuaGuiElement
 --- @param reserves table<string, uint>
 local function sync_reserves(grid, reserves)
@@ -397,8 +339,7 @@ local function sync_reserves(grid, reserves)
     end
 end
 
---- The inline set-reserve editor row of the reserves section, or nil when the
---- panel is collapsed to the open button.
+--- The inline set-reserve editor row of the reserves section, or nil when the panel is collapsed to the open button.
 --- @param player LuaPlayer
 --- @return LuaGuiElement?
 local function get_reserve_editor(player)
@@ -407,8 +348,8 @@ local function get_reserve_editor(player)
     return content and Shared.section_frame(content, 'reserves')['body-frame'].body['reserve-editor'] or nil
 end
 
---- Enable/refresh the editor's amount widgets for the currently picked item.
---- Slider notches sit at full stacks (0–10); the textfield takes anything.
+--- Enable/refresh the editor's amount widgets for the currently picked item; slider notches sit at full stacks
+--- (0-10), the textfield takes anything.
 --- @param editor LuaGuiElement the editor row
 --- @param item string? picked item, nil when the elem button is empty
 --- @param count uint? amount to show (defaults kept by callers)
@@ -421,9 +362,7 @@ local function sync_editor_count(editor, item, count)
     editor['lbf-reserve-confirm'].enabled = enabled
     if item then
         local stack = prototypes.item[item].stack_size
-        -- Step must stay compatible with the bounds at every point, so reset
-        -- it before shrinking the range (the previous item's stack could be
-        -- larger than the new maximum).
+        -- Step must stay compatible with the bounds at every point, so reset it before shrinking the range.
         slider.set_slider_value_step(1)
         slider.set_slider_minimum_maximum(0, 10 * stack)
         slider.set_slider_value_step(stack)
@@ -434,8 +373,7 @@ local function sync_editor_count(editor, item, count)
     end
 end
 
---- Back to the empty "add a new item" state: picker cleared, amount widgets
---- disabled, no slot being edited.
+--- Back to the empty "add a new item" state: picker cleared, amount widgets disabled, no slot being edited.
 --- @param editor LuaGuiElement
 local function reset_reserve_editor(editor)
     editor.tags = {}
@@ -443,9 +381,8 @@ local function reset_reserve_editor(editor)
     sync_editor_count(editor, nil)
 end
 
---- Load an existing slot's `item` into the editor row for editing. The slot
---- it came from is kept in the row's tags so confirming with a different
---- item replaces it.
+--- Load an existing slot's `item` into the editor row; kept in the row's tags so confirming with a different item
+--- replaces it.
 --- @param player LuaPlayer
 --- @param data LbfPlayerData
 --- @param item string
@@ -459,9 +396,8 @@ local function open_reserve_editor(player, data, item)
     sync_editor_count(editor, item, data.reserves[item] or prototypes.item[item].stack_size)
 end
 
---- Apply the editor: write the picked item/amount into reserves (replacing the
---- edited item if the picker changed; amount 0 clears it) and reset the row
---- to its empty state.
+--- Apply the editor: write the picked item/amount into reserves (replacing the edited item if the picker changed;
+--- amount 0 clears it) and reset the row to its empty state.
 --- @param player LuaPlayer
 --- @param data LbfPlayerData
 --- @param editor LuaGuiElement
@@ -479,8 +415,8 @@ local function confirm_reserve_editor(player, data, editor)
     State.refresh(player)
 end
 
---- Copy minimum values from the player's logistic group named `LBF::<player-name>`
---- (case-insensitive) into their reserves (§6 — import-on-click only, no live sync).
+--- Copy minimum values from the player's logistic group named `LBF::<player-name>` (case-insensitive) into their
+--- reserves. Import-on-click only, no live sync.
 --- @param player LuaPlayer
 --- @param data LbfPlayerData
 local function import_reserves(player, data)
@@ -514,13 +450,12 @@ local function import_reserves(player, data)
     end
 end
 
---- Build the reserved-items section body: the slot grid, the always-visible
---- inline set-reserve editor row below it (never a separate window — that
---- would fight the character screen for focus), and the import footer.
+--- Build the reserved-items section body: the slot grid, the always-visible inline set-reserve editor row below it
+--- (never a separate window — that would fight the character screen for focus), and the import footer.
 --- @param body LuaGuiElement the section's body flow (Shared.add_section's return)
 --- @param player LuaPlayer
 function Reserves.build(body, player)
-    -- The pane hugs the grid's width; pushers on both sides center it in the body.
+    -- The pane hugs the grid's width; pushers on both sides center it.
     local pane_row = body.add({ type = 'flow', name = 'reserves-pane-row', direction = 'horizontal' })
     GuiUtil.add_pusher(pane_row)
     local reserves_pane = pane_row.add({
@@ -532,9 +467,8 @@ function Reserves.build(body, player)
     GuiUtil.add_pusher(pane_row)
     reserves_pane.add({ type = 'table', name = 'lbf-reserves', style = 'filter_slot_table', column_count = RESERVE_COLUMNS })
 
-    -- Empty picker = "add a new item"; the amount widgets stay disabled until
-    -- an item is picked. Pushers on both sides center it, matching the
-    -- reserves grid above.
+    -- Empty picker = "add a new item"; amount widgets stay disabled until an item is picked. Pushers center it,
+    -- matching the reserves grid above.
     local editor_row = body.add({ type = 'flow', name = 'reserve-editor-row', direction = 'horizontal' })
     GuiUtil.add_pusher(editor_row)
     local editor = editor_row.add({
@@ -583,8 +517,7 @@ function Reserves.build(body, player)
     })
     GuiUtil.add_pusher(editor_row)
 
-    -- Import bar at the bottom of the section, styled like the map
-    -- generator's "Map exchange string" subfooter.
+    -- Import bar at the bottom, styled like the map generator's "Map exchange string" subfooter.
     local import_footer = body.add({ type = 'frame', name = 'import-footer', style = 'lbf_reserves_footer_frame' })
     local import_flow = set_style(
         import_footer.add({ type = 'flow', name = 'flow', direction = 'horizontal', style = 'player_input_horizontal_flow' }),
@@ -616,7 +549,7 @@ function Reserves.on_slot(event, _, tags, player)
         data.reserves[item] = nil
         local editor = get_reserve_editor(player)
         if editor and editor.tags.item == item then
-            reset_reserve_editor(editor) -- it was editing the removed item
+            reset_reserve_editor(editor) -- was editing the removed item
         end
         State.refresh(player)
     else
@@ -670,9 +603,8 @@ function Build.panel(player)
     local data = State.get_player_data(player.index)
 
     if not data.ui.open then
-        -- Compact form: a single blue icon button, nothing else — it just
-        -- opens the panel. The master switch lives in the open panel (and the
-        -- toolbar shortcut mirrors it).
+        -- Compact form: a single blue icon button, nothing else — it just opens the panel. The master switch
+        -- lives in the open panel (and the toolbar shortcut mirrors it).
         player.gui.relative.add({
             type = 'sprite-button',
             name = FRAME_NAME,
@@ -701,8 +633,7 @@ function Build.panel(player)
     })
     local content = frame.add({ type = 'flow', name = 'content', direction = 'vertical' })
 
-    -- Decorative wordmark strip; pushers center it, and it must never
-    -- intercept clicks (no tags, ignored_by_interaction).
+    -- Decorative wordmark strip; pushers center it, must never intercept clicks (no tags, ignored_by_interaction).
     if SHOW_BANNER then
         local banner_row = content.add({ type = 'flow', name = 'banner-row', direction = 'horizontal' })
         GuiUtil.add_pusher(banner_row)
@@ -737,10 +668,8 @@ function Build.panel(player)
 
     local appearance_body = Shared.add_section(content, 'appearance', 'lbf-family-appearance', { 'lbf-gui.appearance' })
 
-    -- Same left/right split as Feed/Collect: the channel's own master switch
-    -- on the left, a vertical divider, then everything it gates stacked
-    -- vertically on the right (radius, opacity, then a strip of five buttons
-    -- — shape plus the four toggles).
+    -- Same left/right split as Feed/Collect: channel master switch on the left, a vertical divider, then
+    -- everything it gates stacked on the right (radius, opacity, then a strip of five buttons).
     local appearance_row = appearance_body.add({ type = 'table', name = 'row', column_count = 3, style = 'lbf_appearance_row_table' })
     Shared.add_channel_switch(appearance_row, 'appearance')
     appearance_row.add({ type = 'line', name = 'separator', direction = 'vertical', style = 'lbf_row_separator_line_stretch' })
@@ -773,12 +702,8 @@ function Build.panel(player)
         tags = { lbf_action = 'opacity' },
     })
 
-    -- The five Appearance toggles as one strip: shape cycles circle/square
-    -- (still a plain preference — an enum, not a boolean, doesn't fit a tree
-    -- node); the other four are all tree children of 'appearance'
-    -- (Shared.add_flag_button), admin-lockable independently (2026-07-17:
-    -- promoted use-player-color and summary to match show-others/starvation —
-    -- see state.lua's TREE_DEF comment and DESIGN.md §12).
+    -- The five Appearance toggles as one strip: shape cycles circle/square (an enum, doesn't fit a tree node);
+    -- the other four are tree children of 'appearance', admin-lockable independently — see state.lua's TREE_DEF.
     local flags_row = appearance_settings.add({ type = 'flow', name = 'flags-row', direction = 'horizontal' })
     local flags_panel = Shared.add_shortcut_panel(flags_row, 'shortcut')
     flags_panel.add({
@@ -835,11 +760,9 @@ end
 
 -- == Sync: pushes storage state into the built widgets == --
 
---- Push storage state into the panel: master switch, flag-button states,
---- enabled/disabled with a "why" tooltip, slider bounds and values, appearance
---- widgets, reserve rows, section expand/collapse. Registered as a State
---- refresh handler. The collapsed state is a bare open button with nothing
---- to sync.
+--- Push storage state into the panel: master switch, flag-button states, enabled/disabled with a "why" tooltip,
+--- slider bounds/values, appearance widgets, reserve rows, section expand/collapse. Registered as a State refresh
+--- handler. The collapsed state is a bare open button with nothing to sync.
 --- @param player LuaPlayer
 function Sync.panel(player)
     local frame = Shared.get_frame(player)
@@ -849,7 +772,7 @@ function Sync.panel(player)
     local data = State.get_player_data(player.index)
     local content = frame.content
     if not content then
-        return -- stale pre-M6 schema; ensure() rebuilds on next join
+        return -- stale schema from an old frame; ensure() rebuilds on next join
     end
     local master_flow = Shared.section_frame(content, 'master')['body-frame'].body['master-flow']
     local master_switch = master_flow['lbf-master']
@@ -892,15 +815,10 @@ function Sync.panel(player)
     local appearance_row = appearance_body.row
     Shared.sync_channel_switch(appearance_row['lbf-setting-appearance'], data, 'appearance', player.index)
     local appearance_settings = appearance_row.settings
-    -- Same rule as the flag buttons: the switch itself greys when the
-    -- master above it is off (Shared.sync_channel_switch), and everything it
-    -- gates (radius, opacity, and the five buttons below) follows the full
-    -- effective state (own preference + every ancestor + admin).
+    -- Everything the channel gates (radius, opacity, the five buttons below) follows the full effective state.
     local appearance_effective = State.effective(player.index, 'appearance')
 
-    -- Radius/opacity are children of 'appearance' too, so their labels and
-    -- sliders grey and warn like the rest when the channel above them is off
-    -- (2026-07-17).
+    -- Radius/opacity are children of 'appearance' too, so they grey/warn like the rest when it's off.
     local appearance_locked_reason = (not appearance_effective) and 'parent' or nil
 
     local sliders_table = appearance_settings['sliders-table']
@@ -972,12 +890,10 @@ end
 function Actions.toggle_setting(_, _, tags, player)
     local id = tags.id --[[@as string]]
     local data = State.get_player_data(player.index)
-    -- Sprite-buttons carry no boolean on the click event (unlike a
-    -- checkbox's element.state) — flip the currently stored value instead.
+    -- Sprite-buttons carry no boolean on the click event (unlike a checkbox's element.state) — flip stored value.
     State.set_enabled(player, id, not data.settings[id].enabled)
     if id == 'appearance_show_others_area' then
-        -- Viewer-opt-in (§12): this toggle changes what *other* owners'
-        -- renders show this player, not this player's own area.
+        -- Viewer-opt-in: this toggle changes what *other* owners' renders show this player, not their own area.
         State.refresh_all()
     else
         State.refresh(player)
@@ -1027,9 +943,8 @@ end
 
 -- == Dispatcher registration and public API == --
 
---- One dispatcher for every panel element, keyed on tags.lbf_action.
---- GuiUtil.new_dispatcher asserts each action is only registered once, so a
---- copy-pasted registration can't silently shadow an earlier handler.
+--- One dispatcher for every panel element, keyed on tags.lbf_action. GuiUtil.new_dispatcher asserts each action is
+--- only registered once, so a copy-pasted registration can't silently shadow an earlier handler.
 local on_action, dispatch_action = GuiUtil.new_dispatcher('lbf_action')
 
 on_action('toggle-panel', Actions.toggle_panel)
@@ -1053,7 +968,7 @@ on_action('reserve-import', Reserves.on_import)
 Gui.build = Build.panel
 Gui.sync = Sync.panel
 
---- Rebuild only when missing or from an older schema (used on join/config change).
+--- Rebuild only when missing or from an older schema (join/config change).
 --- @param player LuaPlayer
 function Gui.ensure(player)
     if not Shared.get_frame(player) or State.get_player_data(player.index).gui_version ~= GUI_VERSION then

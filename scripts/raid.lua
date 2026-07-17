@@ -1,14 +1,4 @@
---- The service passes (DESIGN.md §1.1): collect outputs/burnt results (+chests
---- and ground items, opt-in), feed fuel, feed ingredients (smelt map for recipe-less
---- furnaces), feed ammo, rebalance machine-to-machine, drain trash slots into
---- chests. One call to Raid.service handles one player for one cycle; the
---- scheduler decides when. Every transfer is tallied into a per-cycle report
---- that feeds the production-graph statistics item and the optional flying-text
---- summary (§4.4, §10.5).
----
---- Each pass lives in its own scripts/raid/*.lua module (shared/collect/fuel/
---- ingredients/ammo/rebalance/trash/report); this file is just the entry point
---- that wires them together per DESIGN.md §12's "split raid" cleanup.
+--- Wires together the raid passes (collect, fuel, ingredients, ammo, rebalance, trash, report), each in its own scripts/raid/*.lua module. Raid.service handles one player for one cycle; the scheduler decides when.
 
 local State = require('__lazy-bastards-friend__.scripts.state')
 local Shared = require('__lazy-bastards-friend__.scripts.raid.shared')
@@ -25,8 +15,7 @@ local Raid = {}
 
 local AFK_TICKS = 5 * 60 * 60 -- after 5 min AFK, service at 1/4 rate
 
---- Rebuild storage.smelt_map (pass 4's recipe-less-furnace inference). Call
---- on_init/config_changed.
+--- Rebuild storage.smelt_map (recipe-less-furnace inference). Call on_init/config_changed.
 Raid.rebuild_smelt_map = Ingredients.rebuild_smelt_map
 
 --- Whether `entity` is a type any raid pass could act on — used by the
@@ -37,7 +26,7 @@ function Raid.is_targetable(entity)
     return entity ~= nil and entity.valid and Shared.TARGETABLE_TYPE[entity.type] == true
 end
 
---- Service one player for one cycle. Cheap early-outs first (§7).
+--- Service one player for one cycle. Cheap early-outs first.
 --- @param player LuaPlayer
 --- @param pending uint[]? indices of players still due in this scheduler sweep
 function Raid.service(player, pending)
@@ -71,9 +60,7 @@ function Raid.service(player, pending)
     local rebalance = State.effective(player.index, 'feed_rebalance')
     local starvation = State.effective(player.index, 'appearance_starvation')
     local take_chests = State.effective(player.index, 'collect_chests') and settings.global['lbf-allow-chest-collect'].value == true
-    -- Chest-take wins over trash drain: draining trash into a chest we raid
-    -- back next cycle would churn items in a loop (auto-trash re-trashes them).
-    local drain_trash = State.effective(player.index, 'feed_trash') and not take_chests
+    local drain_trash = State.effective(player.index, 'feed_trash') and not take_chests -- chest-take wins: else trash->chest->collect would churn in a loop
     local take_ground = State.effective(player.index, 'collect_ground')
 
     if not (collect or feed_fuel or feed_ingredients or combat or drain_trash or rebalance) then

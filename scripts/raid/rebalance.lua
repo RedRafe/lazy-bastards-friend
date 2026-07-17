@@ -1,15 +1,4 @@
---- Pass 6: rebalance (DESIGN.md §1.1 pass 6, §12).
---
--- Machine-to-machine only — never touches the player's inventory or reserves,
--- so it works even when the player carries nothing. Scoped by **item name**
--- rather than "identical machines" (DESIGN.md's original wording): simpler,
--- and it lets e.g. a coal-hoarding stone furnace feed a coal-starved steel
--- furnace. The ingredient side only considers inventories that *already* hold
--- the item (no empty-acceptance inference — that would duplicate all of
--- ingredients.pass's recipe/smelt-map logic for marginal benefit). Both
--- sides use a flat stack-size cap rather than each pass's finer per-entity
--- cap (FEED_SECONDS, artillery automated_ammo_count, ...) — rebalance only
--- needs a coarse "don't overfill" ceiling, not an exact one.
+--- Pass 6: rebalance. Machine-to-machine only (never touches player inventory/reserves), scoped by item name rather than identical machines (e.g. a coal-hoarding stone furnace can feed a coal-starved steel furnace). Ingredient side only tops up inventories that already hold the item (no empty-acceptance inference, to avoid duplicating ingredients.pass's recipe/smelt-map logic); both sides use a flat stack-size cap rather than each pass's finer per-entity cap.
 
 local Distribution = require('__lazy-bastards-friend__.scripts.lib.distribution')
 local Transfer = require('__lazy-bastards-friend__.scripts.lib.transfer')
@@ -17,8 +6,7 @@ local Shared = require('__lazy-bastards-friend__.scripts.raid.shared')
 
 local Rebalance = {}
 
---- Fuel-item groups: every fuel inventory already holding a given item, plus
---- every empty one whose burner accepts that item's fuel category.
+--- Fuel-item groups: every fuel inventory already holding a given item, plus every empty one whose burner accepts that item's fuel category.
 --- @param entities LuaEntity[]
 --- @return table<string, LbfFeedGroup>
 local function rebalance_fuel_groups(entities)
@@ -54,8 +42,7 @@ local function rebalance_fuel_groups(entities)
     return groups
 end
 
---- Ingredient-item groups: every crafter/lab input inventory already holding
---- a given item.
+--- Ingredient-item groups: every crafter/lab input inventory already holding a given item.
 --- @param entities LuaEntity[]
 --- @return table<string, LbfFeedGroup>
 local function rebalance_ingredient_groups(entities)
@@ -93,9 +80,7 @@ local function rebalance_ingredient_groups(entities)
     return groups
 end
 
---- Execute one group's rebalance: compute the shared water level, then pair
---- off donors (holders above it) and receivers (holders below it) with
---- direct inventory-to-inventory transfers — no player inventory involved.
+--- Execute one group's rebalance: compute the shared water level, then pair off donors (holders above it) and receivers (below it) with direct inventory-to-inventory transfers.
 --- @param group LbfFeedGroup
 local function rebalance_group(group)
     if #group.inventories < 2 then

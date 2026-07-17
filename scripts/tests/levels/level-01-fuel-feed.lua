@@ -1,7 +1,4 @@
---- L01 — Feed channel, fuel pass only. Burner machines in every fuel state
---- (empty, ore-with-no-fuel, fully fed, low-fuel) plus a burner-mining-drill,
---- a boiler and a burner-inserter, so the fuel pass (DESIGN.md §1.1) can be
---- exercised in isolation from the ingredient pass (that's L02).
+--- L01 — Feed channel, fuel pass only. Burner machines in every fuel state (empty, ore-with-no-fuel, fully fed, low-fuel) plus a drill, boiler and burner-inserter, isolated from the ingredient pass (that's L02).
 
 local Bench = require('__lazy-bastards-friend__.scripts.tests.lib.bench')
 local Harness = require('__lazy-bastards-friend__.scripts.tests.lib.harness')
@@ -19,8 +16,7 @@ local BENCH = {
     { name = 'boiler', position = { 6, 4 } },
 }
 
---- Tiered fuel kit: coal (best-first among these three), wood, solid-fuel —
---- verifies the fuel pass prefers higher-value fuel and only spends what it needs.
+--- Tiered fuel kit — verifies the fuel pass prefers higher-value fuel (coal) and only spends what it needs.
 local KIT = {
     ['coal'] = 40,
     ['wood'] = 40,

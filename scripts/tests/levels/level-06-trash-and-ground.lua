@@ -1,5 +1,5 @@
---- L06 — Trash-slot drain and ground-item pickup (both opt-in flags, DESIGN.md
---- §10.3). Three chests exercise the drain's target priority: a chest already
+--- L06 — Trash-slot drain and ground-item pickup (both opt-in flags). Three
+--- chests exercise the drain's target priority: a chest already
 --- holding the same item, a chest filtered for a different item but otherwise
 --- empty, and a plain empty chest with no filter — the first two must win over
 --- the third. Loose items on the ground exercise the separate pickup pass.

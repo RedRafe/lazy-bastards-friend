@@ -1,5 +1,5 @@
 --- Wiring only: module requires, refresh-handler registration, event dispatch.
---- All behavior lives in scripts/ (see DESIGN.md §11).
+--- All behavior lives in scripts/.
 
 local State = require('__lazy-bastards-friend__.scripts.state')
 local Rendering = require('__lazy-bastards-friend__.scripts.rendering')
@@ -134,7 +134,7 @@ for _, event_id in pairs({
     end)
 end
 
--- Per-entity exclusion cleanup (DESIGN.md §10.4): once an excluded entity is
+-- Per-entity exclusion cleanup: once an excluded entity is
 -- gone, drop it from every player's table — `useful_id` is already the
 -- entity's unit_number, so no separate registration-id map is needed.
 on(defines.events.on_object_destroyed, function(event)
@@ -173,7 +173,7 @@ on('lbf-toggle', function(event)
     end
 end)
 
--- Per-entity exclusion toggle (DESIGN.md §10.4): hover an entity, press the
+-- Per-entity exclusion toggle: hover an entity, press the
 -- (unbound-by-default) hotkey. No selection-tool item needed.
 on('lbf-toggle-exclude', function(event)
     local player = game.get_player(event.player_index)
@@ -208,7 +208,7 @@ on(defines.events.on_runtime_mod_setting_changed, function(event)
         if player then
             State.pull_setting(player, setting)
             if setting == 'lbf-show-others-area' then
-                -- Viewer-opt-in (§12): this player's own area is unaffected,
+                -- Viewer-opt-in: this player's own area is unaffected,
                 -- but every other owner's render list needs recomputing to
                 -- add/drop this player.
                 State.refresh_all()
@@ -225,7 +225,7 @@ on(defines.events.on_runtime_mod_setting_changed, function(event)
     elseif setting == 'lbf-watchdog-enabled' or setting == 'lbf-spm-threshold' then
         if setting == 'lbf-watchdog-enabled' and settings.global[setting].value == true then
             -- Turning the watchdog on (settings screen or admin switch) un-trips
-            -- it — the only re-arm path; re-enabling masters no longer is (§2.1).
+            -- it — the only re-arm path; re-enabling masters no longer is.
             storage.auto_disabled = false
         end
         storage.spm_strikes = 0 -- changed rules restart the debounce

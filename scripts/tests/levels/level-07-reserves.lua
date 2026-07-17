@@ -1,8 +1,4 @@
---- L07 — Reserved items (DESIGN.md §6). A per-item minimum the mod must never
---- dip below when feeding/collecting on the player's behalf. One empty furnace
---- is enough to drive the player's coal down toward zero if reserves aren't
---- respected; the level sets a 20-coal reserve and the check fails if the pass
---- ever spends past it.
+--- L07 — Reserved items: a per-item minimum the mod must never dip below when feeding/collecting. Sets a 20-coal reserve; the check fails if the pass ever spends past it.
 
 local Bench = require('__lazy-bastards-friend__.scripts.tests.lib.bench')
 local Harness = require('__lazy-bastards-friend__.scripts.tests.lib.harness')
@@ -55,10 +51,7 @@ Event.add(defines.events.on_player_created, function(event)
         return false
     end, 900)
 
-    -- Long-lived guard: any tick where the reserve is violated is an immediate,
-    -- permanent failure, so this fails as soon as it happens rather than
-    -- polling once at a fixed deadline. 1800 ticks is still ample time for the
-    -- feed pass to burn through the spendable 10 coal above the reserve.
+    -- Long-lived guard: fails immediately on violation rather than polling once at a deadline; 1800 ticks is ample for the feed pass to burn through the spendable 10 coal above the reserve.
     Harness.watch('reserve never dips below ' .. RESERVE_AMOUNT .. ' coal', function()
         return player.get_main_inventory().get_item_count(RESERVE_ITEM) < RESERVE_AMOUNT
     end, 1800)

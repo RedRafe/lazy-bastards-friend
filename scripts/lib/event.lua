@@ -1,23 +1,5 @@
---- Additive `script.X` wiring: lets multiple modules subscribe to the same
---- event — including the lifecycle events — without clobbering each other's
---- registration. Every `script.on_event` / `on_init` / `on_load` /
---- `on_configuration_changed` call *replaces* whatever handler was previously
---- registered, so two independent modules calling the same one directly
---- silently drop the first; only the last registrant wins. Every event
---- registration in this mod (control.lua, test-bench levels) goes through
---- `Event` instead of calling `script.X` directly — one real `script.X` call
---- per event, fanning out to every handler added, in registration order —
---- so ordering between modules never matters and nothing gets dropped.
---- Same idea covers `script.on_nth_tick`: scheduler.lua and watchdog.lua each
---- pick their own interval today (601 vs. up to 600, deliberately disjoint —
---- see watchdog.lua), but that's an invariant someone has to remember, not a
---- guarantee. Registering nth-tick handlers through `Event` as well removes
---- the need for it: two handlers on the same interval fan out instead of the
---- second clobbering the first.
----
---- Modeled after the dispatcher pattern in reference/event.lua and
---- data/core/lualib/event_handler.lua, trimmed to what this mod needs: no
---- tokens; removal is by handler reference, not by token.
+--- Additive `script.X` wiring: lets multiple modules subscribe to the same event — including lifecycle events and on_nth_tick — without clobbering each other's registration, since raw `script.X` calls replace any prior handler and silently drop the first registrant. Every registration in this mod goes through `Event` instead: one real `script.X` call per event/interval, fanning out to every handler added, in registration order.
+--- Modeled after reference/event.lua and data/core/lualib/event_handler.lua, trimmed down: no tokens; removal is by handler reference.
 
 local Event = {}
 
@@ -63,9 +45,7 @@ function Event.on_nth_tick(interval, handler)
     list[#list + 1] = handler
 end
 
---- Unregister `handler` from `interval`. Once the last handler for an
---- interval is removed, the real `script.on_nth_tick` registration is torn
---- down too (so an idle interval costs nothing, per scheduler.lua/watchdog.lua).
+--- Unregister `handler` from `interval`. Once the last handler for an interval is removed, the real `script.on_nth_tick` registration is torn down too, so an idle interval costs nothing.
 --- @param interval uint
 --- @param handler fun(event: NthTickEventData)
 function Event.remove_nth_tick(interval, handler)
@@ -84,9 +64,7 @@ function Event.remove_nth_tick(interval, handler)
     end
 end
 
---- Builds an additive registrar for a lifecycle slot (on_init/on_load/
---- on_configuration_changed): one real `script_fn` call, fanning out to every
---- handler added, in registration order.
+--- Builds an additive registrar for a lifecycle slot (on_init/on_load/on_configuration_changed): one real `script_fn` call, fanning out to every handler added, in registration order.
 --- @param script_fn fun(handler: fun(event: table?))
 --- @return fun(handler: fun(event: table?))
 local function make_lifecycle(script_fn)
@@ -105,18 +83,15 @@ local function make_lifecycle(script_fn)
     end
 end
 
---- Register a handler to run on `script.on_init`, without replacing any
---- handler already registered by another module.
+--- Register a handler for `script.on_init`, without replacing others already registered.
 --- @param handler fun()
 Event.on_init = make_lifecycle(script.on_init)
 
---- Register a handler to run on `script.on_load`, without replacing any
---- handler already registered by another module.
+--- Register a handler for `script.on_load`, without replacing others already registered.
 --- @param handler fun()
 Event.on_load = make_lifecycle(script.on_load)
 
---- Register a handler to run on `script.on_configuration_changed`, without
---- replacing any handler already registered by another module.
+--- Register a handler for `script.on_configuration_changed`, without replacing others already registered.
 --- @param handler fun(data: ConfigurationChangedData)
 Event.on_configuration_changed = make_lifecycle(script.on_configuration_changed)
 

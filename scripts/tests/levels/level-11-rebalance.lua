@@ -1,5 +1,5 @@
---- L11 — Rebalance pass (DESIGN.md §1.1 pass 6, §12, M5). Two stone furnaces
---- close enough to share the player's AoE: one starts fully fueled, the other
+--- L11 — Rebalance pass. Two stone furnaces close enough to share the
+--- player's AoE: one starts fully fueled, the other
 --- empty. The player carries no coal at all, so the fuel-feed pass (disabled
 --- here anyway) could never be responsible for any change — only the
 --- machine-to-machine rebalance pass can move coal from one furnace to the

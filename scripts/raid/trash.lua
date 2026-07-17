@@ -1,5 +1,4 @@
---- Trash-slot drain (DESIGN.md §10.3): moves the player's logistic trash into
---- nearby chests, never dumping blindly onto whatever's closest.
+--- Moves the player's logistic trash into nearby chests, never dumping blindly onto whatever's closest.
 
 local Transfer = require('__lazy-bastards-friend__.scripts.lib.transfer')
 local Shared = require('__lazy-bastards-friend__.scripts.raid.shared')
@@ -12,8 +11,7 @@ local Trash = {}
 --- @field requests table<string, boolean>? requested/filtered item names
 --- @field accepts_any boolean not pull-only and not filtered to specific items
 
---- Classify the chests in the service area as drain targets. Requester/buffer
---- chests and filtered storage chests only ever receive what they ask for.
+--- Classify the chests in the service area as drain targets. Requester/buffer chests and filtered storage chests only ever receive what they ask for.
 --- @param entities LuaEntity[]
 --- @return LbfChestTarget[]?
 local function chest_targets(entities)
@@ -59,8 +57,7 @@ local function chest_targets(entities)
     return targets
 end
 
---- Chest priority for one item (§10.3 — never dump blindly): 1. chests already
---- holding it, 2. chests requesting/filtered to it, 3. empty unfiltered chests.
+--- Chest priority for one item: 1. chests already holding it, 2. chests requesting/filtered to it, 3. empty unfiltered chests.
 --- @param target LbfChestTarget
 --- @param name string
 --- @param tier integer

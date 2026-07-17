@@ -1,13 +1,3 @@
---- Admin frame (DESIGN.md §4.3), tabbed like the map-settings GUI:
---- - Watchdog tab: on/off switch (On after a trip re-arms — the only re-arm
----   path), SPM threshold field, live SPM/status readout.
---- - Players tab: /admin-style roster (titlebar search, alphabetical) where
----   every row is "On/Off switch + one lock checkbox per channel", including
----   the global "Everyone" row above the table (global switch + masters).
---- Opened from the button in the relative panel or the /lbf-admin command.
---- Every action is re-checked against player.admin server-side — a GUI can go
---- stale between demotion and the close we do on on_player_demoted.
-
 local State = require('__lazy-bastards-friend__.scripts.state')
 local Watchdog = require('__lazy-bastards-friend__.scripts.watchdog')
 local GuiUtil = require('__lazy-bastards-friend__.scripts.lib.gui')
@@ -22,7 +12,7 @@ local FRAME_NAME = 'lbf-admin'
 --- @return LuaGuiElement? valid open frame, clearing stale registry entries
 local function get_frame(player)
     if not storage.admin_guis then
-        return nil -- pre-M3 save, before on_configuration_changed ran State.init
+        return nil -- save from before on_configuration_changed ran State.init
     end
     local frame = storage.admin_guis[player.index]
     if frame and frame.valid then
@@ -32,16 +22,16 @@ local function get_frame(player)
     return nil
 end
 
---- The tabbed pane, at the bottom of the vanilla nesting for tabbed GUIs:
---- frame > entity_frame > inside_shallow_frame > tab_deep_frame_in_entity_frame > tabbed_pane.
+--- The tabbed pane, at the bottom of the vanilla nesting: frame > entity_frame > inside_shallow_frame >
+--- tab_deep_frame_in_entity_frame > tabbed_pane.
 --- @param frame LuaGuiElement
 --- @return LuaGuiElement
 local function get_tabs(frame)
     return frame.shell.deep['lbf-tabs']
 end
 
---- Point the blurb above the tabs at the selected tab's feature. Keyed on the
---- tab content's name, so adding a tab only needs a matching locale entry.
+--- Point the blurb above the tabs at the selected tab's feature; keyed on the tab content's name, so adding a tab
+--- only needs a matching locale entry.
 --- @param frame LuaGuiElement
 local function update_tab_description(frame)
     local tabs = get_tabs(frame)
@@ -49,9 +39,8 @@ local function update_tab_description(frame)
     frame.shell['lbf-tab-desc'].caption = { 'lbf-gui.tab-desc-' .. content.name }
 end
 
--- Status label font color, keyed on Watchdog.status(): green while armed and
--- watching, red once tripped (auto-retired), grey when turned off by
--- setting, yellow while idle (nothing left to retire).
+-- Status label font color, keyed on Watchdog.status(): green while armed/watching, red once tripped
+-- (auto-retired), grey when turned off by setting, yellow while idle (nothing left to retire).
 local STATUS_COLORS = {
     armed = { r = 0.3, g = 0.9, b = 0.3 },
     tripped = { r = 1, g = 0.3, b = 0.3 },
@@ -82,8 +71,7 @@ end
 
 --- @param tabs LuaGuiElement
 local function build_watchdog_tab(tabs)
-    -- A plain padded flow: the tabbed pane's own content frame already draws
-    -- the panel background.
+    -- A plain padded flow: the tabbed pane's own content frame already draws the panel background.
     local page = set_style(
         tabs.add({ type = 'flow', name = 'watchdog', direction = 'vertical' }),
         { padding = 12, vertical_spacing = 8 }
@@ -145,10 +133,8 @@ local function build_players_tab(tabs)
         { padding = 12, vertical_spacing = 8 }
     )
 
-    -- Global controls, above the player manager: one captioned bordered frame
-    -- whose single row reads exactly like a player row — On/Off switch on the
-    -- left (the global whole-mod switch, storage.settings.mod), channel checkboxes
-    -- (the masters) on the right.
+    -- Global controls, above the player manager: one captioned bordered frame whose single row reads exactly
+    -- like a player row — On/Off switch on the left (storage.settings.mod), channel checkboxes on the right.
     local globals = page.add({
         type = 'frame',
         name = 'lbf-globals',
@@ -181,8 +167,8 @@ local function build_players_tab(tabs)
         })
     end
 
-    -- The player manager proper, structured like the vanilla /admin GUI:
-    -- frame > subheader_frame_with_text_on_the_right > scroll_pane > table.
+    -- The player manager proper, structured like vanilla /admin: frame > subheader_frame_with_text_on_the_right
+    -- > scroll_pane > table.
     local manager = page.add({ type = 'frame', name = 'manager', style = 'deep_frame_in_shallow_frame', direction = 'vertical' })
     local subheader = manager.add({ type = 'frame', name = 'subheader', style = 'subheader_frame_with_text_on_the_right' })
     local flow = subheader.add({ type = 'flow', name = 'subheader-flow', direction = 'horizontal', style = 'lbf_subheader_flow' })
@@ -212,8 +198,8 @@ local function rebuild_rows(frame)
     local grid = manager['lbf-players']['lbf-table']
     grid.clear()
 
-    -- Name column stretches: the widest element sets a table column's width,
-    -- so both the header and every name label below carry the stretch flag.
+    -- Name column stretches: the widest element sets a table column's width, so header and every name label
+    -- below carry the stretch flag.
     set_style(
         grid.add({ type = 'label', caption = { 'lbf-gui.col-player' }, style = 'caption_label' }),
         { horizontally_stretchable = true }
@@ -266,14 +252,13 @@ local function rebuild_rows(frame)
             --- @type LocalisedString
             local tooltip = { 'lbf-gui.lock-tooltip', target.name }
             if not data.settings[channel].enabled then
-                -- The read-only "their own preference differs" indicator (§4.3).
+                -- Read-only "their own preference differs" indicator.
                 tooltip = { '', tooltip, '\n', { 'lbf-gui.own-pref-off' } }
             end
             grid.add({
                 type = 'checkbox',
                 state = data.settings[channel].allowed,
-                -- Greyed when something above it already turns the cell moot:
-                -- the global switch, that channel's master, or the row's On/Off.
+                -- Greyed when the global switch, channel master, or row's On/Off already makes the cell moot.
                 enabled = storage.settings.mod.enabled and storage.settings[channel].enabled and mod.allowed,
                 tooltip = tooltip,
                 tags = { lbf_admin_action = 'lock', player_index = target.index, channel = channel },
@@ -284,8 +269,8 @@ end
 
 -- == Sync =====================================================================
 
---- Push current state into one player's open frame. Registered as a State
---- refresh handler; also closes the frame if the viewer lost admin.
+--- Push current state into one player's open frame. Registered as a State refresh handler; also closes the frame
+--- if the viewer lost admin.
 --- @param player LuaPlayer
 function Admin.sync(player)
     local frame = get_frame(player)
@@ -298,14 +283,13 @@ function Admin.sync(player)
     end
     local watchdog = get_tabs(frame).watchdog
     local settings_group = watchdog['lbf-settings']
-    -- The switch shows "will the watchdog act": enabled and not tripped.
-    -- Off while tripped, so flipping it back to On is the re-arm gesture.
+    -- The switch shows "will the watchdog act": enabled and not tripped; off while tripped, so flipping it back
+    -- to On is the re-arm gesture.
     local armed = settings.global['lbf-watchdog-enabled'].value == true and not storage.auto_disabled
     settings_group['enabled-row']['lbf-watchdog-switch'].switch_state = armed and 'right' or 'left'
     local threshold = settings.global['lbf-spm-threshold'].value --[[@as double]]
     local field = settings_group['threshold-row']['lbf-threshold']
-    -- Only overwrite when the value actually differs, so the ~10 s live
-    -- refresh doesn't clobber a threshold the admin is mid-typing.
+    -- Only overwrite when the value actually differs, so the ~10s live refresh doesn't clobber mid-typing.
     if tonumber(field.text) ~= threshold then
         field.text = string.format('%g', threshold)
     end
@@ -329,8 +313,7 @@ function Admin.sync(player)
     rebuild_rows(frame)
 end
 
---- Sync every open admin frame (join/leave, lock changes, master changes).
---- Free when none are open — the usual case.
+--- Sync every open admin frame (join/leave, lock changes, master changes); free when none are open.
 function Admin.refresh_all()
     if not storage.admin_guis then
         return
@@ -373,9 +356,6 @@ function Admin.open(player)
     })
     set_style(titlebar, { height = 32, vertical_align = 'top', horizontal_spacing = 8 })
 
-    -- Vanilla /admin search: a frame_action_button in the titlebar toggles a
-    -- textfield to its left. Inserted before the close button (titlebar
-    -- children so far: label, drag handle, close).
     titlebar.add({
         type = 'textfield',
         name = 'lbf-search',
@@ -395,12 +375,8 @@ function Admin.open(player)
         tags = { lbf_admin_action = 'search-toggle' },
     })
 
-    -- The vanilla nesting for a tabbed GUI:
-    -- frame > entity_frame > inside_shallow_frame > tab_deep_frame_in_entity_frame > tabbed_pane.
-    -- The pane is named 'lbf-tabs', not 'tabs': indexing an element with .tabs
-    -- hits the LuaGuiElement API attribute (tabbed-pane only), not the child.
+
     local shell = frame.add({ type = 'frame', name = 'shell', style = 'entity_frame', direction = 'vertical' })
-    -- One-line blurb for the selected tab, heading the entity frame.
     set_style(
         shell.add({ type = 'label', name = 'lbf-tab-desc' }),
         { single_line = false, width = 400 }
@@ -418,14 +394,7 @@ function Admin.open(player)
 
     storage.admin_guis[player.index] = frame
     frame.force_auto_center()
-    -- Only take player.opened focus when nothing else is open: doing so
-    -- unconditionally would close whatever window (e.g. the relative panel,
-    -- an entity gui) the player already had open, since player.opened is
-    -- exclusive. player.opened alone isn't enough here: the character
-    -- inventory/crafting screen (where our relative panel's button lives)
-    -- leaves player.opened nil but sets opened_gui_type to
-    -- defines.gui_type.controller, so check both or writing to player.opened
-    -- still force-closes the inventory out from under the player.
+
     if not player.opened and not player.opened_gui_type then
         player.opened = frame
     end
@@ -441,8 +410,8 @@ function Admin.close(player)
     end
 end
 
---- Close every open admin frame — the GUI schema may have changed
---- (on_configuration_changed); stale frames would crash the next sync.
+--- Close every open admin frame — the GUI schema may have changed (on_configuration_changed); stale frames would
+--- crash the next sync.
 function Admin.close_all()
     if not storage.admin_guis then
         return
@@ -468,14 +437,13 @@ end
 
 -- == Actions ==================================================================
 
---- One dispatcher for every admin element, keyed on tags.lbf_admin_action
---- (the open button lives in the relative panel but is tagged for us too).
---- GuiUtil.new_dispatcher asserts each action is only registered once, so a
+--- One dispatcher for every admin element, keyed on tags.lbf_admin_action (the open button lives in the relative
+--- panel but is tagged for us too). GuiUtil.new_dispatcher asserts each action is only registered once, so a
 --- copy-pasted `on_action` can't silently shadow an earlier handler.
 local on_action, dispatch_action = GuiUtil.new_dispatcher('lbf_admin_action')
 
---- Re-checks player.admin before running a handler — a GUI can go stale
---- between demotion and the close we do on on_player_demoted.
+--- Re-checks player.admin before running a handler — a GUI can go stale between demotion and the close we do on
+--- on_player_demoted.
 --- @param handler fun(event: table, element: LuaGuiElement, tags: table, player: LuaPlayer)
 --- @return fun(event: table, element: LuaGuiElement, tags: table, player: LuaPlayer)
 local function admin_only(handler)

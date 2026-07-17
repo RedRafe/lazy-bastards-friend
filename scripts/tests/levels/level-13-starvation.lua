@@ -1,5 +1,5 @@
---- L13 — Starvation feedback (DESIGN.md §10.10, M5). Rendered icons aren't
---- assertable through the remote interface, so this checks the underlying
+--- L13 — Starvation feedback. Rendered icons aren't assertable through the
+--- remote interface, so this checks the underlying
 --- behavior the render reflects: a furnace the player has no spare fuel for
 --- (reserve == carried amount, so `available <= 0` — the exact condition the
 --- fuel pass records as "starved") stays unfueled, and a furnace pre-filled

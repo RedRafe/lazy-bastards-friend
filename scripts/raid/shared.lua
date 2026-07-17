@@ -1,7 +1,4 @@
---- Cross-pass infrastructure for scripts/raid.lua's orchestration (DESIGN.md
---- §1.1, §7): the entity type tables every pass filters by, the entity-scan
---- cache, and the generic water-fill distribution helpers each feed pass
---- builds its groups on top of.
+--- Cross-pass infrastructure for scripts/raid.lua: entity type tables, the entity-scan cache, and generic water-fill distribution helpers.
 
 local State = require('__lazy-bastards-friend__.scripts.state')
 local Transfer = require('__lazy-bastards-friend__.scripts.lib.transfer')
@@ -12,8 +9,7 @@ local Shared = {}
 local CACHE_CYCLES = 10 -- re-scan at most every N update periods
 local CACHE_MOVE_FRACTION = 0.25 -- re-scan when moved more than radius * this
 
--- Everything any pass may want; each pass filters by capability at use time
--- (fuel inventory present, output map entry, turret ammo define).
+-- Everything any pass may want; each pass filters by capability at use time (fuel inventory present, output map entry, turret ammo define).
 Shared.SCAN_TYPES = {
     'furnace',
     'assembling-machine',
@@ -29,8 +25,7 @@ Shared.SCAN_TYPES = {
 }
 Shared.CHEST_TYPES = { 'container', 'logistic-container' }
 
--- Explicit output map: get_output_inventory() on other types can return
--- inventories we must not raid (a turret's "output" is its ammo).
+-- Explicit output map: get_output_inventory() on other types can return inventories we must not raid (a turret's "output" is its ammo).
 Shared.OUTPUT_INVENTORY = {
     ['furnace'] = defines.inventory.crafter_output,
     ['assembling-machine'] = defines.inventory.crafter_output,
@@ -48,8 +43,7 @@ Shared.IS_CHEST = { ['container'] = true, ['logistic-container'] = true }
 -- Crafter types the ingredient pass fills through defines.inventory.crafter_input.
 Shared.INGREDIENT_TYPES = { ['furnace'] = true, ['assembling-machine'] = true, ['rocket-silo'] = true }
 
--- Lookup set of every type a raid could ever touch (SCAN_TYPES + CHEST_TYPES),
--- for the exclusion-toggle hotkey (DESIGN.md §10.4) to validate what's hovered.
+-- Lookup set of every type a raid could ever touch (SCAN_TYPES + CHEST_TYPES), for the exclusion-toggle hotkey to validate what's hovered.
 Shared.TARGETABLE_TYPE = {}
 for _, t in pairs(Shared.SCAN_TYPES) do
     Shared.TARGETABLE_TYPE[t] = true
@@ -58,9 +52,7 @@ for _, t in pairs(Shared.CHEST_TYPES) do
     Shared.TARGETABLE_TYPE[t] = true
 end
 
---- This player's or another connected player's service-area anchor: the
---- character. Shared between Raid.service's own anchor choice and collect's
---- rival lookup, so overlap is checked against where the service area actually is.
+--- This player's (or another connected player's) service-area anchor: the character. Shared between Raid.service's anchor choice and collect's rival lookup.
 --- @param player LuaPlayer
 --- @return LuaEntity?
 function Shared.service_anchor(player)
@@ -72,7 +64,7 @@ end
 --- @field collected table<string, integer> machines/ground -> player
 --- @field fed table<string, integer> player -> machines/turrets/chests
 
--- == Entity cache (DESIGN.md §7) ============================================
+-- == Entity cache ============================================================
 
 --- @param player LuaPlayer
 --- @param data LbfPlayerData
@@ -114,7 +106,7 @@ function Shared.get_entities(player, data, anchor, include_chests, include_groun
     --- @type EntitySearchFilters
     local filter = { type = types, force = player.force, to_be_deconstructed = false }
     if data.shape == 'square' then
-        -- The AoE shape is also the search shape (§5): what you see is what gets raided.
+        -- The AoE shape is also the search shape: what you see is what gets raided
         filter.area = { { position.x - radius, position.y - radius }, { position.x + radius, position.y + radius } }
     else
         filter.position = position
@@ -123,7 +115,7 @@ function Shared.get_entities(player, data, anchor, include_chests, include_groun
     local found = surface.find_entities_filtered(filter)
 
     if include_ground then
-        -- Item-entities are force-neutral, so they need their own unfiltered query.
+        -- Item-entities are force-neutral, so they need their own unfiltered query
         --- @type EntitySearchFilters
         local ground_filter = { type = 'item-entity', area = filter.area, position = filter.position, radius = filter.radius }
         for _, entity in pairs(surface.find_entities_filtered(ground_filter)) do
@@ -148,7 +140,7 @@ end
 
 -- == Distribution helpers ====================================================
 
---- Player item totals by name, summed across qualities (reserves are per-name, §6).
+--- Player item totals by name, summed across qualities (reserves are per-name).
 --- @param main LuaInventory
 --- @return table<string, integer>
 function Shared.inventory_totals(main)
@@ -205,8 +197,7 @@ function Shared.add_to_group(groups, name, inventory, cap)
     group.counts[n] = Transfer.count_by_name(inventory, name)
 end
 
---- Water-fill each item group across its target inventories, capped per target,
---- and execute the transfers. Decrements `totals` as it goes.
+--- Water-fill each item group across its target inventories, capped per target, and execute the transfers; decrements `totals` as it goes.
 --- @param groups table<string, LbfFeedGroup>
 --- @param main LuaInventory
 --- @param totals table<string, integer>

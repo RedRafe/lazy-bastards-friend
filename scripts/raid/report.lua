@@ -1,22 +1,17 @@
---- Reporting (DESIGN.md §4.4, §10.5): pumps a cycle's tally into the
---- production-graph statistics and the optional flying-text summary.
+--- Pumps a cycle's tally into the production-graph statistics and the optional flying-text summary.
 
 local Report = {}
 
 local SUMMARY_INTERVAL_TICKS = 600 -- de-noise the flying text vs. the ~1s-per-player raid cycle
 
---- Pump the cycle's tally into the production graphs (collected = input,
---- fed = output on the lbf-items-moved item) and the global counter every
---- cycle; the optional flying-text summary is accumulated across cycles and
---- only actually shown every SUMMARY_INTERVAL_TICKS — at the default ~1s
---- per-player cycle a per-cycle flying text would be constant noise.
+--- Pump the cycle's tally into the production graphs (collected = input, fed = output on the lbf-items-moved item) and the global counter every cycle; the flying-text summary accumulates and only shows every SUMMARY_INTERVAL_TICKS to avoid per-cycle noise.
 --- @param player LuaPlayer
 --- @param surface LuaSurface where the transfers happened (the character's surface)
 --- @param data LbfPlayerData
 --- @param report LbfReport
 --- @param summary_effective boolean `appearance_summary`'s effective state — a
----   tree child of `appearance` now (DESIGN.md §12), so an admin/parent-off
----   silences the summary the same way it silences every other render
+---   tree child of `appearance`, so an admin/parent-off silences the summary
+---   the same way it silences every other render
 function Report.flush(player, surface, data, report, summary_effective)
     local collected_total, fed_total = 0, 0
     for _, count in pairs(report.collected) do

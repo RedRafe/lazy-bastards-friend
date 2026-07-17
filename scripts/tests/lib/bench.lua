@@ -1,8 +1,4 @@
---- Shared setup helpers for the test-bench campaign (scripts/tests/levels/*).
---- Every level is an independent scenario save: it must not touch the mod's own
---- storage directly (cross-mod pokes go through `remote.call('lazy-bastards-friend',
---- ...)`, see docs/API.md) but it can freely build its own bench geometry with the
---- helpers below.
+--- Shared setup helpers for the test-bench campaign (scripts/tests/levels/*). Every level is an independent scenario save: it must not touch the mod's own storage directly (cross-mod pokes go through `remote.call('lazy-bastards-friend', ...)`, see docs/API.md) but can freely build its own bench geometry with the helpers below.
 
 local Event = require('__lazy-bastards-friend__.scripts.lib.event')
 local Gui = require('__lazy-bastards-friend__.scripts.tests.lib.gui')
@@ -94,8 +90,7 @@ function Bench.give_kit(player, kit)
     end
 end
 
---- Researches a list of technologies outright (no queueing, no prerequisites check
---- beyond what `researched = true` already cascades).
+--- Researches a list of technologies outright (no queueing; prerequisites cascade via `researched = true`).
 --- @param force LuaForce
 --- @param names string[]
 function Bench.research(force, names)
@@ -107,8 +102,7 @@ function Bench.research(force, names)
     end
 end
 
---- Sets the level tag + instruction lines shown in the on-screen results
---- panel (scripts/tests/lib/gui.lua).
+--- Sets the level tag + instruction lines shown in the on-screen results panel (scripts/tests/lib/gui.lua).
 --- @param player LuaPlayer
 --- @param tag string short level tag, e.g. "L01 fuel feed"
 --- @param lines string[]
@@ -117,8 +111,7 @@ function Bench.intro(player, tag, lines)
     player.game_view_settings.show_entity_info = true
 end
 
---- Standard on_player_created wiring: give the kit, show the intro, done once
---- per player. Call this from a level's top level, e.g.:
+--- Standard on_player_created wiring: give the kit, show the intro, done once per player. Call this from a level's top level, e.g.:
 ---   Bench.on_player_created(KIT, 'L01 fuel feed', LINES)
 --- @param kit table<string, integer>
 --- @param tag string

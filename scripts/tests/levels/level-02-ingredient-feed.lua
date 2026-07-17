@@ -1,6 +1,4 @@
---- L02 — Feed channel, ingredient pass (M4). Furnace ore-feed, assembler
---- ingredient-feed and lab science-pack-feed, isolated from the fuel pass (L01
---- covers that) by pre-fueling everything here.
+--- L02 — Feed channel, ingredient pass (M4). Furnace ore-feed, assembler ingredient-feed and lab science-pack-feed, isolated from the fuel pass (L01 covers that) by pre-fueling everything here.
 
 local Bench = require('__lazy-bastards-friend__.scripts.tests.lib.bench')
 local Harness = require('__lazy-bastards-friend__.scripts.tests.lib.harness')

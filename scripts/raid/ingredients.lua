@@ -1,6 +1,4 @@
---- Pass 4: feed ingredients (DESIGN.md §1.1), including the recipe-less-furnace
---- smelt map that lets a fresh/idle furnace still get fed from carried inputs,
---- and lab feeding scoped to the force's current research.
+--- Pass 4: feed ingredients, including a recipe-less-furnace smelt map (feeds fresh/idle furnaces from carried inputs) and lab feeding scoped to current research.
 
 local Transfer = require('__lazy-bastards-friend__.scripts.lib.transfer')
 local Shared = require('__lazy-bastards-friend__.scripts.raid.shared')
@@ -9,13 +7,9 @@ local Ingredients = {}
 
 local FEED_SECONDS = 30 -- top up ingredient inputs to ~this many seconds of crafting/research
 
--- == Smelt map (DESIGN.md §1.1 pass 4) ======================================
+-- == Smelt map ================================================================
 
---- Rebuild storage.smelt_map: crafting category -> { ingredient item -> {amount,
---- energy} } (per-craft amount and the recipe's crafting time, §1.1's 30s-of-
---- crafting cap needs both), from visible single-item-ingredient recipes. Hidden
---- recipes are excluded on purpose — that keeps recycler-style categories (whose
---- hidden recipes accept nearly every item) out of the map. Call on_init/config_changed.
+--- Rebuild storage.smelt_map: crafting category -> { ingredient item -> {amount, energy} }, from visible single-item-ingredient recipes (hidden recipes excluded to keep recycler-style catch-all categories out). Call on_init/config_changed.
 function Ingredients.rebuild_smelt_map()
     local map = {}
     for _, recipe in pairs(prototypes.recipe) do
@@ -40,8 +34,7 @@ function Ingredients.rebuild_smelt_map()
     storage.smelt_map = map
 end
 
---- Item requirements of the machine's set recipe: the active one, or (furnaces)
---- the recipe it last smelted — an idle furnace keeps making what it made.
+--- Item requirements of the machine's set recipe: the active one, or (furnaces) the last-smelted recipe — an idle furnace keeps making what it made.
 --- @param entity LuaEntity
 --- @return Ingredient[]?
 --- @return double? recipe crafting energy (seconds at crafting_speed 1)
@@ -63,8 +56,7 @@ local function recipe_ingredients(entity)
     return nil
 end
 
---- Per-craft amount + recipe energy of `name` in this machine's smelt-map
---- categories (amount 1 / energy 1 if unknown).
+--- Per-craft amount + recipe energy of `name` in this machine's smelt-map categories (amount 1 / energy 1 if unknown).
 --- @param proto LuaEntityPrototype
 --- @param name string
 --- @return {amount: integer, energy: double}
@@ -80,8 +72,7 @@ local function smelt_entry(proto, name)
     return { amount = 1, energy = 1 }
 end
 
---- Best smeltable the player can spare for a fresh (recipe-less, empty) furnace:
---- the most abundant spare input its categories accept, name as tiebreak.
+--- Best smeltable the player can spare for a fresh (recipe-less, empty) furnace: the most abundant spare input its categories accept, name as tiebreak.
 --- @param proto LuaEntityPrototype
 --- @param totals table<string, integer>
 --- @param reserves table<string, integer>
@@ -104,14 +95,7 @@ local function pick_smelt_input(proto, totals, reserves)
     return best_name, best_entry
 end
 
---- How many crafts/research-units this entity gets through in ~FEED_SECONDS at
---- its current speed (min 1, so a slow/unresearched entity still gets its full
---- per-craft amount instead of a fraction). Labs have no LuaEntity.crafting_speed
---- (that's crafter/character-only), so derive their speed from the prototype's
---- get_researching_speed() and entity.speed_bonus (force + module/beacon effects
---- on the lab itself — unlike the old force-modifier-only approximation, this is exact).
---- Unlike LuaRecipe.energy (seconds at speed 1), LuaTechnology.research_unit_energy
---- is in ticks, so it needs converting to seconds before it's comparable.
+--- How many crafts/research-units this entity gets through in ~FEED_SECONDS at its current speed (min 1). Labs derive speed from prototype.get_researching_speed() + entity.speed_bonus since LuaEntity.crafting_speed doesn't apply to them; research_unit_energy is in ticks so it's converted to seconds to match LuaRecipe.energy.
 --- @param entity LuaEntity
 --- @param energy double? recipe/research energy; nil/0 -> treat as 1 craft
 --- @return double
@@ -151,10 +135,7 @@ function Ingredients.pass(player, entities, main, totals, reserves, report, star
     for _, entity in pairs(entities) do
         if entity.valid then
             local entity_type = entity.type
-            -- Per-entity starvation bookkeeping: any unspareable ingredient
-            -- marks it starved; if every checked ingredient is already at its
-            -- cap, it's saturated. Skipped entirely (both lists nil) when the
-            -- starvation flag is off.
+            -- Per-entity starvation bookkeeping: any unspareable ingredient marks it starved; saturated if every checked ingredient is already at cap.
             local wants_any, is_starved, is_saturated = false, false, true
             if Shared.INGREDIENT_TYPES[entity_type] then
                 local input = entity.get_inventory(defines.inventory.crafter_input)
@@ -177,8 +158,7 @@ function Ingredients.pass(player, entities, main, totals, reserves, report, star
                             end
                         end
                     elseif entity_type == 'furnace' then
-                        -- No recipe history: top up what's loaded, else infer
-                        -- from the smelt map (§1.1 pass 4).
+                        -- No recipe history: top up what's loaded, else infer from the smelt map
                         local proto = entity.prototype
                         local name = Shared.first_item_name(input)
                         local entry
@@ -203,7 +183,7 @@ function Ingredients.pass(player, entities, main, totals, reserves, report, star
                     end
                 end
             elseif entity_type == 'lab' and research_ingredients then
-                -- Feed only what current research consumes and this lab accepts.
+                -- Feed only what current research consumes and this lab accepts
                 local input = entity.get_inventory(defines.inventory.lab_input)
                 if input then
                     local proto = entity.prototype
