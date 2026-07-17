@@ -19,7 +19,7 @@ data:extend({
     },
     {
         type = 'bool-setting',
-        name = 'lbf-allow-chest-take',
+        name = 'lbf-allow-chest-collect',
         setting_type = 'runtime-global',
         default_value = true,
         order = 'b[collect]-a',
@@ -53,7 +53,7 @@ data:extend({
         order = 'd[other]-a',
     },
     -- Per-player runtime. Ordered to match the relative GUI top-to-bottom:
-    -- master switch, then Behavior (Feed, then Take/collect), then
+    -- master switch, then Behavior (Feed, then Collect), then
     -- Appearance (radius through show-starvation/summary).
     {
         type = 'bool-setting',
@@ -92,14 +92,14 @@ data:extend({
     },
     {
         type = 'bool-setting',
-        name = 'lbf-take-chests',
+        name = 'lbf-collect-chests',
         setting_type = 'runtime-per-user',
         default_value = false,
         order = 'c[collect]-a',
     },
     {
         type = 'bool-setting',
-        name = 'lbf-pickup-ground',
+        name = 'lbf-collect-ground',
         setting_type = 'runtime-per-user',
         default_value = false,
         order = 'c[collect]-b',

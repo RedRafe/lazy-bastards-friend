@@ -6,33 +6,48 @@ local SettingsTree = require('__lazy-bastards-friend__.scripts.lib.settings_tree
 
 local State = {}
 
---- @alias LbfChannel 'collect'|'feed'|'combat'
+--- @alias LbfChannel 'collect'|'feed'|'appearance'
 
 --- @type LbfChannel[]
-State.channels = { 'collect', 'feed', 'combat' }
+-- Order matches the relative GUI's Feed/Take row order (relative.lua's
+-- BEHAVIOR_GROUPS) so the admin player table's columns line up with it.
+State.channels = { 'feed', 'collect', 'appearance' }
 
 --- The settings tree: 'mod' is the whole-mod master (mirrors the toolbar
 --- shortcut and the `lbf-enabled` setting). 'collect'/'feed'/'appearance' are
---- umbrella nodes; their children are the fine-grained behavior/appearance
---- flags gated by them at runtime. Child ids carry their family's prefix
---- (`feed_fuel`, `collect_chests`, `appearance_fill`, …) — both for internal
---- clarity and because these ids are also the public remote-API flag names
---- (`set_player_flag`/`get_player_state`, docs/API.md); the GUI strips the
---- prefix back off to reuse the existing unprefixed locale keys (§4.2,
---- `relative.lua`'s `locale_suffix`).
+--- the three admin-lockable channels (own global master + per-player lock,
+--- `State.channels`, admin GUI player table); their children are the
+--- fine-grained behavior/appearance flags gated by them at runtime. Child ids
+--- carry their family's prefix (`feed_fuel`, `collect_chests`,
+--- `appearance_fill`, …) — both for internal clarity and because these ids
+--- are also the public remote-API flag names (`set_player_flag`/
+--- `get_player_state`, docs/API.md); the GUI strips the prefix back off to
+--- reuse the existing unprefixed locale keys (§4.2, `relative.lua`'s
+--- `locale_suffix`).
 ---
---- 'combat' is a true child of 'feed' (DESIGN.md §12, 2026-07-16): turret
---- feeding is *not* independent of the Feed channel — retiring Feed (e.g. the
---- SPM watchdog) always stops it too, so `lbf-watchdog-stops-combat` (the
---- "leave combat running" escape hatch) was removed as structurally
---- impossible now. Combat keeps its own admin lock/global switch (it's still
---- listed in `State.channels` for the admin GUI/remote API), just gated by
---- Feed's chain as well.
+--- 'combat' is a true child of 'feed' (DESIGN.md §12) with no admin lock/
+--- master of its own (2026-07-16, "vertical" refactor): turret feeding is
+--- fully absorbed into Feed — it's just another per-player preference in
+--- Feed's advanced list now (like `feed_fuel`), not a channel. It no longer
+--- has a `State.channels` entry or a dedicated admin-GUI column; admins gate
+--- it only indirectly via Feed's own master/lock. Still exposed remotely, but
+--- through `set_player_flag`/`get_player_state.flags` like any other flag,
+--- not `set_active`/`lock_player`.
 ---
---- 'starvation' is a child of 'appearance' (§12) — decoupled from Feed's
---- *tree* gating (its own admin lock is independent of Feed's), even though
---- in practice raid.lua only ever populates starved/saturated data while a
---- feed pass actually runs.
+--- 'appearance' replaces the old inert umbrella node of the same name,
+--- promoted to a real channel (own global master + per-player lock, third
+--- `State.channels` slot, replacing 'combat's admin-GUI column; briefly
+--- called 'renders' internally before this rename, later that same day --
+--- see DESIGN.md §12): its `setting` is the former `appearance_fill` node
+--- ("Fill area" -- DESIGN.md §9 flagged this as the future "gate rendering
+--- as a whole" hook), so the existing per-player Fill checkbox doubles as
+--- this channel's own preference. 'appearance_starvation' and
+--- 'appearance_show_others_area' are now its children -- turning the
+--- 'appearance' channel off *for everyone* (admin) hides all AoE areas and
+--- starvation icons regardless of individual prefs (destructive); leaving it
+--- on is non-destructive -- each player's own opt-in (`appearance_fill`,
+--- `appearance_show_others_area`, `appearance_starvation`) still applies as
+--- before.
 local TREE_DEF = {
     {
         id = 'mod',
@@ -41,8 +56,8 @@ local TREE_DEF = {
             {
                 id = 'collect',
                 children = {
-                    { id = 'collect_chests', setting = 'lbf-take-chests' },
-                    { id = 'collect_ground', setting = 'lbf-pickup-ground' },
+                    { id = 'collect_chests', setting = 'lbf-collect-chests' },
+                    { id = 'collect_ground', setting = 'lbf-collect-ground' },
                 },
             },
             {
@@ -57,8 +72,8 @@ local TREE_DEF = {
             },
             {
                 id = 'appearance',
+                setting = 'lbf-fill-area',
                 children = {
-                    { id = 'appearance_fill', setting = 'lbf-fill-area' },
                     { id = 'appearance_show_others_area', setting = 'lbf-show-others-area' },
                     { id = 'appearance_starvation', setting = 'lbf-show-starvation' },
                 },
@@ -159,8 +174,8 @@ end
 
 --- Default relative-gui layout prefs for a brand new player: panel starts
 --- collapsed to its button; once opened, only Behavior is expanded (the common
---- case — deciding what to feed/take), everything else starts collapsed to
---- keep the panel small. 'feed'/'take' are the advanced-options expanders
+--- case — deciding what to feed/collect), everything else starts collapsed to
+--- keep the panel small. 'feed'/'collect' are the advanced-options expanders
 --- inside Behavior.
 --- @return {open: boolean, sections: table<string, boolean>}
 function State.default_ui()
@@ -169,7 +184,7 @@ function State.default_ui()
         sections = {
             behavior = true,
             feed = false,
-            take = false,
+            collect = false,
             appearance = false,
             reserves = false,
         },
@@ -317,10 +332,18 @@ function State.effective(player_index, id)
     return Tree:effective(storage.settings, data.settings, id)
 end
 
+-- The channels that actually move items (scheduler/rendering "is there any
+-- reason to service/draw this player" gate). 'appearance' is presentation-only —
+-- a player with appearance on but collect+feed both off/locked has nothing to
+-- show and no work to schedule, so it's deliberately excluded here even
+-- though it's a full channel in `State.channels` (admin GUI/remote API).
+--- @type LbfChannel[]
+local WORK_CHANNELS = { 'collect', 'feed' }
+
 --- @param player_index uint
 --- @return boolean
 function State.any_effective(player_index)
-    for _, channel in pairs(State.channels) do
+    for _, channel in pairs(WORK_CHANNELS) do
         if State.effective(player_index, channel) then
             return true
         end
@@ -333,7 +356,7 @@ function State.any_master()
     if not storage.settings.mod.enabled then
         return false
     end
-    for _, channel in pairs(State.channels) do
+    for _, channel in pairs(WORK_CHANNELS) do
         if storage.settings[channel].enabled then
             return true
         end

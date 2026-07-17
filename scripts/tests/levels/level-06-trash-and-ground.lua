@@ -34,7 +34,7 @@ Event.on_init(function()
 end)
 
 Bench.on_player_created(KIT, 'L06 trash & ground', {
-    'This level enables "Empty trash into chests" and "Pick up ground items" for you.',
+    'This level enables "Empty trash into chests" and "Collect ground items" for you.',
     'Right-click your inventory slots to mark coal/stone as trash (logistic trash slots) — coal should land in the chest that already has coal, stone in the filtered chest, never the plain empty one.',
     'Walk over the loose plates on the ground east of the chests to test pickup.',
 })

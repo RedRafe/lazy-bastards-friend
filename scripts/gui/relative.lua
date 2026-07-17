@@ -33,11 +33,13 @@ local ANCHOR = {
 -- The two user-facing behavior rows. Each is a channel checkbox ("Feed
 -- machines" / "Collect from machines") plus an advanced-options expander
 -- (ui.sections[id]) listing tree node ids (`advanced`) to render inside it.
--- 'combat' ("Feed turrets") is a true tree child of 'feed' now (DESIGN.md
--- §12, 2026-07-16 — turret feeding always stops when Feed does) as well as
--- its GUI placement here. 'starvation' moved to the Appearance section below
--- — it's a tree child of 'appearance', not 'feed', so admins can lock it
--- independently even though raid.lua only ever populates it during a feed pass.
+-- 'combat' ("Feed turrets") is a true tree child of 'feed' (DESIGN.md §1/§12)
+-- with no admin lock/master of its own — a plain preference like feed_fuel,
+-- just placed here in Feed's advanced list. 'starvation'/'show-others' moved
+-- to the Appearance section below — they're tree children of the 'appearance'
+-- channel now, not 'feed', so admins can lock the whole render channel
+-- independently even though raid.lua only ever populates starvation data
+-- during a feed pass.
 local BEHAVIOR_GROUPS = {
     {
         id = 'feed',
@@ -45,7 +47,7 @@ local BEHAVIOR_GROUPS = {
         advanced = { 'feed_fuel', 'feed_ingredients', 'combat', 'feed_trash', 'feed_rebalance' },
     },
     {
-        id = 'take',
+        id = 'collect',
         channel = 'collect',
         advanced = { 'collect_chests', 'collect_ground' },
     },
@@ -101,8 +103,12 @@ local function add_master_switch(parent)
 end
 
 -- Channel nodes keep their original locale key prefix ('channel-'); every
--- other tree node (behavior/appearance flags) uses 'flag-'.
-local CHANNEL_IDS = { collect = true, feed = true, combat = true }
+-- other tree node (behavior/appearance flags) uses 'flag-'. 'combat' isn't a
+-- channel anymore (§1/§12) so it now uses 'flag-combat'. 'appearance' doesn't
+-- need an entry here either — its checkbox is the bespoke "Fill area" one
+-- below, not built through add_toggle_checkbox/sync_toggle_checkbox's
+-- generic prefix logic (it predates the tree, like appearance_fill did).
+local CHANNEL_IDS = { collect = true, feed = true }
 
 -- Behavior/appearance flag ids carry a family prefix (feed_/collect_/
 -- appearance_ — see state.lua's TREE_DEF; also the public remote-API flag
@@ -121,11 +127,12 @@ local function locale_suffix(id)
     return id
 end
 
--- 'appearance_fill'/'appearance_show_others_area' predate the settings tree
--- and keep their own locale keys (built alongside their sliders/extra
--- tooltips) rather than the generic 'flag-<suffix>-tooltip' pattern.
+-- 'appearance' (formerly 'appearance_fill')/'appearance_show_others_area'
+-- predate the settings tree and keep their own locale keys (built alongside
+-- their sliders/extra tooltips) rather than the generic 'flag-<suffix>-tooltip'
+-- pattern.
 local TOOLTIP_OVERRIDE = {
-    appearance_fill = 'lbf-gui.fill-tooltip',
+    appearance = 'lbf-gui.fill-tooltip',
     appearance_show_others_area = 'lbf-gui.show-others-tooltip',
 }
 
@@ -258,7 +265,7 @@ function Gui.build(player)
         caption = { 'lbf-gui.fill' },
         tooltip = { 'lbf-gui.fill-tooltip' },
         state = true,
-        tags = { lbf_action = 'toggle-setting', id = 'appearance_fill' },
+        tags = { lbf_action = 'toggle-setting', id = 'appearance' },
     })
     fill_flow.add({
         type = 'slider',
@@ -621,9 +628,9 @@ function Gui.sync(player)
             sync_toggle_checkbox(advanced['lbf-setting-' .. id], data, id)
         end
     end
-    local take_advanced = behavior_body['take-advanced']
-    if settings.global['lbf-allow-chest-take'].value ~= true then
-        local chests = take_advanced['lbf-setting-collect_chests']
+    local collect_advanced = behavior_body['collect-advanced']
+    if settings.global['lbf-allow-chest-collect'].value ~= true then
+        local chests = collect_advanced['lbf-setting-collect_chests']
         chests.enabled = false
         chests.tooltip = { 'lbf-gui.flag-chests-forbidden' }
     end
@@ -641,9 +648,9 @@ function Gui.sync(player)
 
     appearance_body['shape-flow']['lbf-shape'].selected_index = data.shape == 'square' and 2 or 1
     local fill_flow = appearance_body['fill-flow']
-    sync_toggle_checkbox(fill_flow['lbf-fill'], data, 'appearance_fill')
+    sync_toggle_checkbox(fill_flow['lbf-fill'], data, 'appearance')
     fill_flow['lbf-opacity'].slider_value = math.floor(data.opacity * 100 + 0.5)
-    fill_flow['lbf-opacity'].enabled = data.settings.appearance_fill.enabled
+    fill_flow['lbf-opacity'].enabled = data.settings.appearance.enabled
     appearance_body['lbf-use-player-color'].state = data.use_player_color
     local color_flow = appearance_body['color-flow']
     color_flow.visible = not data.use_player_color

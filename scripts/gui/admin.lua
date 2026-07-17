@@ -172,7 +172,7 @@ local function build_players_tab(tabs)
             type = 'checkbox',
             name = 'lbf-master-' .. channel,
             caption = { 'lbf-gui.col-' .. channel },
-            tooltip = { 'lbf-gui.master-tooltip' },
+            tooltip = { '', { 'lbf-gui.master-tooltip' }, '\n', { 'lbf-gui.col-' .. channel .. '-tooltip' } },
             state = storage.settings[channel].enabled,
             tags = { lbf_admin_action = 'master', channel = channel },
         })
@@ -217,7 +217,12 @@ local function rebuild_rows(frame)
     )
     grid.add({ type = 'label', caption = { 'lbf-gui.col-onoff' }, style = 'caption_label' })
     for _, channel in pairs(State.channels) do
-        grid.add({ type = 'label', caption = { 'lbf-gui.col-' .. channel }, style = 'caption_label' })
+        grid.add({
+            type = 'label',
+            caption = { 'lbf-gui.col-' .. channel },
+            tooltip = { 'lbf-gui.col-' .. channel .. '-tooltip' },
+            style = 'caption_label',
+        })
     end
 
     --- @type LuaPlayer[]

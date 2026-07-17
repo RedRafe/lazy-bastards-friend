@@ -29,19 +29,26 @@ Event.add(defines.events.on_player_created, function(event)
     Harness.check('get_active accepts all three channels', function()
         return type(call('get_active', 'collect')) == 'boolean'
             and type(call('get_active', 'feed')) == 'boolean'
-            and type(call('get_active', 'combat')) == 'boolean'
+            and type(call('get_active', 'appearance')) == 'boolean'
     end)
 
     Harness.check('set_active / get_active round-trip', function()
-        call('set_active', 'combat', false)
-        local off = call('get_active', 'combat') == false
-        call('set_active', 'combat', true)
-        local on = call('get_active', 'combat') == true
+        call('set_active', 'appearance', false)
+        local off = call('get_active', 'appearance') == false
+        call('set_active', 'appearance', true)
+        local on = call('get_active', 'appearance') == true
         return off and on
     end)
 
     Harness.check('unknown channel is rejected', function()
         local ok = pcall(call, 'get_active', 'nonsense')
+        return not ok
+    end)
+
+    -- 'combat' is no longer a channel (§1/§12 "vertical" refactor) — it's a
+    -- plain per-player flag under Feed's chain, gated by lock_player('feed').
+    Harness.check('unknown channel "combat" is rejected', function()
+        local ok = pcall(call, 'get_active', 'combat')
         return not ok
     end)
 
@@ -54,11 +61,23 @@ Event.add(defines.events.on_player_created, function(event)
     end)
 
     Harness.check('lock_player overrides player preference', function()
-        call('lock_player', player.index, 'combat', true)
-        local locked_off = call('get_player_state', player.index).effective.combat == false
-        call('lock_player', player.index, 'combat', false)
-        local unlocked_on = call('get_player_state', player.index).effective.combat == true
+        call('lock_player', player.index, 'appearance', true)
+        local locked_off = call('get_player_state', player.index).effective.appearance == false
+        call('lock_player', player.index, 'appearance', false)
+        local unlocked_on = call('get_player_state', player.index).effective.appearance == true
         return locked_off and unlocked_on
+    end)
+
+    -- 'combat' has no admin lock/channel of its own (§1/§12): locking Feed is
+    -- the only way an admin stops it now. get_player_state has no
+    -- `effective.combat` entry to read (it's a flag, not a channel), so this
+    -- only asserts the one lock path that actually gates it still works.
+    Harness.check('lock_player("feed") is the only admin lock reaching combat', function()
+        call('lock_player', player.index, 'feed', true)
+        local feed_locked = call('get_player_state', player.index).effective.feed == false
+        call('lock_player', player.index, 'feed', false)
+        local feed_unlocked = call('get_player_state', player.index).effective.feed == true
+        return feed_locked and feed_unlocked
     end)
 
     Harness.check('set_player_flag / get_player_state round-trip', function()
@@ -67,6 +86,14 @@ Event.add(defines.events.on_player_created, function(event)
         call('set_player_flag', player.index, 'collect_ground', false)
         local off = call('get_player_state', player.index).flags.collect_ground == false
         return on and off
+    end)
+
+    Harness.check('combat is settable through set_player_flag', function()
+        call('set_player_flag', player.index, 'combat', false)
+        local off = call('get_player_state', player.index).flags.combat == false
+        call('set_player_flag', player.index, 'combat', true)
+        local on = call('get_player_state', player.index).flags.combat == true
+        return off and on
     end)
 
     Harness.check('unknown flag is rejected', function()

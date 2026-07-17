@@ -1,7 +1,8 @@
---- L05 — Combat channel. Ammo-turrets in every ammo state; the Combat channel
---- keeps them topped up from the player's inventory independently of Collect/Feed
---- (DESIGN.md §1: Combat is meant to keep running after the SPM watchdog retires
---- the other two — see L09 for that interaction).
+--- L05 — Combat (turret feeding). Ammo-turrets in every ammo state; the ammo
+--- pass keeps them topped up from the player's inventory. Combat is a plain
+--- per-player preference under Feed now, not its own channel (DESIGN.md
+--- §1/§12): it stops whenever Feed does, including the SPM watchdog retiring
+--- it — see L09 for that interaction.
 
 local Bench = require('__lazy-bastards-friend__.scripts.tests.lib.bench')
 local Harness = require('__lazy-bastards-friend__.scripts.tests.lib.harness')

@@ -42,7 +42,7 @@ function Rendering.refresh(player)
 
     -- fill=false hides the area entirely (edge included); opacity is kept for
     -- when it's re-enabled.
-    if not player.connected or not State.effective(player.index, 'appearance_fill') or not State.any_effective(player.index) then
+    if not player.connected or not State.effective(player.index, 'appearance') or not State.any_effective(player.index) then
         return
     end
     local anchor = player.character

@@ -218,7 +218,7 @@ on(defines.events.on_runtime_mod_setting_changed, function(event)
         end
     elseif setting == 'lbf-min-radius' or setting == 'lbf-max-radius' then
         State.refresh_all() -- re-clamp slider bounds and drawn radii everywhere
-    elseif setting == 'lbf-allow-chest-take' then
+    elseif setting == 'lbf-allow-chest-collect' then
         State.refresh_all() -- grey out / restore the per-player chest checkbox
     elseif setting == 'lbf-update-period' then
         Scheduler.rebuild() -- recompute the nth-tick interval

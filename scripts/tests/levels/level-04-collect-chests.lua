@@ -1,6 +1,6 @@
 --- L04 — Collect channel, opt-in chest looting. Chest contents only move when
---- `lbf-take-chests` (per-player flag, "chests" in FLAG_NAMES) is on and
---- `lbf-allow-chest-take` (global runtime setting) allows it; both default the
+--- `lbf-collect-chests` (per-player flag, "chests" in FLAG_NAMES) is on and
+--- `lbf-allow-chest-collect` (global runtime setting) allows it; both default the
 --- way vanilla balance wants (per-player off, global on), so this level's intro
 --- tells the player to flip their own switch.
 

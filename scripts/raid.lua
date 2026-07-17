@@ -1187,7 +1187,7 @@ function Raid.service(player, pending)
     local feed_ingredients = State.effective(player.index, 'feed_ingredients')
     local rebalance = State.effective(player.index, 'feed_rebalance')
     local starvation = State.effective(player.index, 'appearance_starvation')
-    local take_chests = State.effective(player.index, 'collect_chests') and settings.global['lbf-allow-chest-take'].value == true
+    local take_chests = State.effective(player.index, 'collect_chests') and settings.global['lbf-allow-chest-collect'].value == true
     -- Chest-take wins over trash drain: draining trash into a chest we raid
     -- back next cycle would churn items in a loop (auto-trash re-trashes them).
     local drain_trash = State.effective(player.index, 'feed_trash') and not take_chests

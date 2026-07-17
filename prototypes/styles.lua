@@ -125,9 +125,9 @@ styles.lbf_players_table = {
     column_alignments = {
         { column = 1, alignment = 'middle-left' }, -- name
         { column = 2, alignment = 'middle-center' }, -- on/off switch
-        { column = 3, alignment = 'middle-center' }, -- collect lock
-        { column = 4, alignment = 'middle-center' }, -- feed lock
-        { column = 5, alignment = 'middle-center' }, -- combat lock
+        { column = 3, alignment = 'middle-center' }, -- feed lock
+        { column = 4, alignment = 'middle-center' }, -- collect lock
+        { column = 5, alignment = 'middle-center' }, -- appearance lock
     },
 }
 

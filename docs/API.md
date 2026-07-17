@@ -13,26 +13,44 @@ arguments raise a Lua error with a `lazy-bastards-friend:` prefix — wrap in
 
 ## Concepts
 
-- **Channels** — the mod's three features, always addressed by string name:
+- **Channels** — the mod's three admin-lockable channels, always addressed by
+  string name:
   - `'collect'` — pull finished products / burnt results (and opt-in chest
     contents) from machines into the player's inventory.
-  - `'feed'` — push fuel and ingredients from the player into machines (and
-    opt-in, drain their trash slots into chests).
-  - `'combat'` — keep turrets topped up with ammo. **Not independent of
-    `'feed'`** (2026-07-16): turning Feed off — including the SPM watchdog
-    retiring it — always stops turret-feeding too. Combat still has its own
-    admin lock/global master switch, but can never be effective while Feed
-    isn't.
+  - `'feed'` — push fuel, ingredients and (via the `combat` flag, see below)
+    ammo from the player into machines/turrets (and opt-in, drain their trash
+    slots into chests).
+  - `'appearance'` — gates every render the mod draws for a player: their own
+    AoE area, other players' AoE areas they've opted into seeing, and
+    starvation/saturation icons. Turning it off for someone hides all of it
+    regardless of their own preferences (a destructive admin override,
+    e.g. "declutter this player's screen"); leaving it on is non-destructive
+    — each player's own opt-in flags (`appearance_show_others_area`,
+    `appearance_starvation`, and the channel's own toggle — the "Fill area"
+    checkbox) still apply as before. It does no item movement of its own.
+    Shown as **"Appearance"** in the admin GUI (internally `'renders'` for a
+    few hours on 2026-07-16 before this rename — see DESIGN.md §12).
+  - **BREAKING (2026-07-16):** `'combat'` (turret ammo feeding) is **not** a
+    channel anymore — it's a plain per-player preference under `'feed'`, set
+    like any other behavior flag through `set_player_flag`/`get_player_state`
+    (see below), with no admin lock/global master of its own. It was already
+    "not independent of Feed" (turning Feed off, including the SPM watchdog
+    retiring it, always stopped turret-feeding too); this removes the
+    now-redundant admin-lock/master it kept alongside that dependency. Admins
+    gate it only indirectly, by locking/disabling Feed.
 - **Tri-state activation** — a channel actually runs for a player only if all
   of these are true: the global whole-mod switch is on (`set_global_master`),
   the channel's global master is on (`set_active`), the player is not
   admin-locked — neither for the whole mod (`lock_player_master`) nor for that
   channel (`lock_player`) — and the player's own toggle is on
-  (`set_player_enabled`). For Combat, this chain also includes Feed's own
-  global/lock/toggle (see above). The combined result is reported as
-  `effective` in `get_player_state`.
-- **Watchdog** — the mod retires Collect+Feed (and, transitively, Combat)
-  automatically once a force's science consumption passes the
+  (`set_player_enabled`). The combined result is reported as `effective` in
+  `get_player_state`. Behavior/appearance flags (`set_player_flag`) sit one
+  level below a channel and inherit its whole chain — `combat`'s effective
+  state, for instance, depends on Feed's global/lock/toggle as well as its own
+  `flags.combat` preference, even though it has no `effective` entry of its
+  own (only channels do).
+- **Watchdog** — the mod retires Collect+Feed (and, transitively, turret
+  feeding) automatically once a force's science consumption passes the
   `lbf-spm-threshold` map setting. Re-enabling masters through
   `set_active(..., true)` does **not** re-arm it — only
   `set_watchdog_enabled(true)` (or the switch in the admin GUI's Watchdog tab)
@@ -66,7 +84,7 @@ toggles or admin locks, and does *not* re-arm a tripped SPM watchdog (use
 
 | arg | type | |
 |---|---|---|
-| `channel` | `string` | `'collect'`, `'feed'` or `'combat'` |
+| `channel` | `string` | `'collect'`, `'feed'` or `'appearance'` |
 | `value` | `boolean` | |
 
 ```lua
@@ -80,7 +98,7 @@ remote.call('lazy-bastards-friend', 'set_active', 'feed', false)
 Read a global master switch.
 
 ```lua
-if remote.call('lazy-bastards-friend', 'get_active', 'combat') then ... end
+if remote.call('lazy-bastards-friend', 'get_active', 'appearance') then ... end
 ```
 
 ### `lock_player(player_index, channel, locked)`
@@ -132,16 +150,16 @@ Full per-player state:
 
 ```lua
 {
-  enabled   = { collect = true,  feed = true,  combat = true },  -- own toggles
-  locked    = { collect = false, feed = false, combat = false }, -- admin locks
+  enabled   = { collect = true,  feed = true,  appearance = true },  -- own toggles
+  locked    = { collect = false, feed = false, appearance = false }, -- admin locks
   locked_master = false,   -- admin whole-mod lock (lock_player_master)
-  effective = { collect = true,  feed = true,  combat = true },  -- what actually runs
+  effective = { collect = true,  feed = true,  appearance = true },  -- what actually runs
   radius    = 16,          -- service radius, tiles (already clamped)
   shape     = 'circle',    -- 'circle' | 'square'
   flags     = {            -- behavior toggles (see set_player_flag)
     feed_fuel = true, feed_ingredients = true, collect_chests = false, collect_ground = false,
     feed_trash = false, summary = false, appearance_show_others_area = false,
-    feed_rebalance = false, appearance_starvation = false,
+    feed_rebalance = false, appearance_starvation = false, combat = true,
   },
   reserves  = { ['coal'] = 50 },  -- item name -> protected minimum
 }
@@ -159,13 +177,18 @@ their panel. Valid flag names, each carrying its settings-tree family prefix
 |---|---|---|
 | `'feed_fuel'` | `true` | Feed channel tops up burners with fuel |
 | `'feed_ingredients'` | `true` | Feed channel fills machine inputs (recipes, smeltables, science packs) |
-| `'collect_chests'` | `false` | Collect channel also empties chests (needs the `lbf-allow-chest-take` map setting) |
+| `'collect_chests'` | `false` | Collect channel also empties chests (needs the `lbf-allow-chest-collect` map setting) |
 | `'collect_ground'` | `false` | Collect channel also picks up items on the ground |
 | `'feed_trash'` | `false` | Feed channel drains logistic trash slots into nearby chests (paused while `collect_chests` is active) |
+| `'combat'` | `true` | Feed channel tops up ammo-turrets from the player's inventory. **2026-07-16:** moved here from the channel API — no admin lock/master of its own anymore, gated only by Feed's chain |
 | `'summary'` | `false` | show a per-cycle floating summary of what was moved |
-| `'appearance_show_others_area'` | `false` | this player also sees every other player's area render (viewer-side; does not affect whether others see *their* area) |
+| `'appearance_show_others_area'` | `false` | this player also sees every other player's area render (viewer-side; does not affect whether others see *their* area) — gated by the `'appearance'` channel |
 | `'feed_rebalance'` | `false` | Feed channel moves surplus fuel/ingredients between over- and under-stocked machines, even when the player carries nothing (§1.1 pass 6) |
-| `'appearance_starvation'` | `false` | briefly show a red icon over machines that wanted an item the player couldn't spare, or green over ones already full |
+| `'appearance_starvation'` | `false` | briefly show a red icon over machines that wanted an item the player couldn't spare, or green over ones already full — gated by the `'appearance'` channel |
+
+Note: `appearance_fill` ("Fill area") is **not** in this table — it graduated
+to the `'appearance'` channel's own toggle (2026-07-16), so it's set through
+`set_active`/`set_player_enabled`/`lock_player` instead.
 
 ```lua
 -- Scenario hands out pre-configured chest raiding:
@@ -199,7 +222,7 @@ Global mod state:
 ```lua
 {
   master        = true,       -- global whole-mod switch (set_global_master)
-  active        = { collect = true, feed = true, combat = true }, -- masters
+  active        = { collect = true, feed = true, appearance = true }, -- masters
   auto_disabled = false,      -- true after the SPM watchdog tripped
   watchdog      = 'armed',    -- 'armed' | 'tripped' | 'disabled' | 'idle'
   spm_threshold = 45,         -- current lbf-spm-threshold map setting

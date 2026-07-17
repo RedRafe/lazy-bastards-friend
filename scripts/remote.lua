@@ -8,8 +8,8 @@ local Watchdog = require('__lazy-bastards-friend__.scripts.watchdog')
 --- @param channel any
 --- @return LbfChannel
 local function check_channel(channel)
-    if channel ~= 'collect' and channel ~= 'feed' and channel ~= 'combat' then
-        error("lazy-bastards-friend: unknown channel '" .. tostring(channel) .. "' (expected 'collect', 'feed' or 'combat')")
+    if channel ~= 'collect' and channel ~= 'feed' and channel ~= 'appearance' then
+        error("lazy-bastards-friend: unknown channel '" .. tostring(channel) .. "' (expected 'collect', 'feed' or 'appearance')")
     end
     return channel
 end
@@ -62,6 +62,12 @@ end
 -- BREAKING (2026-07-16): 'appearance_show_others' renamed to
 -- 'appearance_show_others_area' and flipped from owner-opt-out ("share my
 -- area") to viewer-opt-in ("show me others' areas") — see DESIGN.md §5/§12.
+-- BREAKING (2026-07-16): 'combat' moved here from the channel API — it's a
+-- plain per-player preference now, gated by Feed's chain, with no admin
+-- lock/master of its own (§1/§12 "vertical" refactor). 'appearance_fill' is
+-- no longer a flag — it graduated to the new 'appearance' channel's own
+-- `setting`, so it's reachable through set_active/get_active/lock_player/
+-- set_player_enabled instead.
 local FLAG_NAMES = {
     feed_fuel = true,
     feed_ingredients = true,
@@ -72,6 +78,7 @@ local FLAG_NAMES = {
     appearance_show_others_area = true,
     feed_rebalance = true,
     appearance_starvation = true,
+    combat = true,
 }
 
 --- @param flag any
