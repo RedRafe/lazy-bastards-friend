@@ -5,7 +5,7 @@
   "author": "RedRafe",
   "source": "https://github.com/RedRafe/lazy-bastards-friend",
   "homepage": "https://mods.factorio.com/mod/lazy-bastards-friend",
-  "contact": "Discord: @redrafe",
+  "contact": "https://discord.gg/pq6bWs8KTY",
   "dependencies": [ "base >= 2.1" ],
   "description": "An early game quality-of-life mod that automatically feeds coal into burners, collects plates, and distributes items in a radius around the player. Skip the early game grind, stop hand feeding, and enjoy effortless autofill and autofeed functionality right from the start.",
   "factorio_version": "2.1"
