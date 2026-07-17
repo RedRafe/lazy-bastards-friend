@@ -131,7 +131,7 @@ end
 --- @field reserves table<string, uint>
 --- @field excluded table<uint, boolean> unit_number -> excluded from this player's raids
 --- @field cache {key: string, tick: uint, x: double, y: double, entities: LuaEntity[]}?
---- @field render {edge: LuaRenderObject?, fill: LuaRenderObject?}
+--- @field render {edge: LuaRenderObject?, fill: LuaRenderObject?, starvation: table<uint, LuaRenderObject>?}
 --- @field idle uint
 --- @field gui_version uint
 --- @field summary {collected: table<string, integer>, fed: table<string, integer>, next_flush: uint}

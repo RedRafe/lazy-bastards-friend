@@ -16,6 +16,13 @@ local function destroy(data)
     if render.fill and render.fill.valid then
         render.fill.destroy()
     end
+    if render.starvation then
+        for _, obj in pairs(render.starvation) do
+            if obj.valid then
+                obj.destroy()
+            end
+        end
+    end
     data.render = {}
 end
 
@@ -100,39 +107,53 @@ function Rendering.refresh(player)
     end
 end
 
--- Starvation feedback: short-lived icons over machines that wanted an item the player couldn't spare (starved) or are already full (saturated); time_to_live self-cleans, no storage bookkeeping.
+-- Starvation feedback: a short-lived icon over machines that wanted an item the player couldn't spare. Tracked per-entity in data.render.starvation (rather than left to time_to_live alone) so a later icon for the same entity replaces rather than stacks on an earlier one, and so they can be force-cleared by destroy() (e.g. toggling LBF off) instead of lingering until they expire.
 local STARVATION_TICKS = 180
+local STARVATION_SCALE = 0.2 -- native icon is 64px (2 tiles at scale 1); shrink to well under one tile
+local STARVATION_INSET = 0.2 -- tiles; half the rendered icon size, so it sits inside the corner rather than straddling it
 local STARVED_TINT = { r = 1, g = 0.3, b = 0.3, a = 1 }
-local SATURATED_TINT = { r = 0.3, g = 1, b = 0.3, a = 1 }
+
+--- Offset from entity.position to its bounding box's bottom-right corner, pulled in by STARVATION_INSET.
+--- @param entity LuaEntity
+--- @return TilePosition
+local function corner_offset(entity)
+    local box = entity.bounding_box
+    local pos = entity.position
+    return {
+        box.right_bottom.x - pos.x - STARVATION_INSET,
+        box.right_bottom.y - pos.y - STARVATION_INSET,
+    }
+end
+
+--- @param data LbfPlayerData
+--- @param player LuaPlayer
+--- @param entity LuaEntity
+local function draw_starvation_icon(data, player, entity)
+    data.render.starvation = data.render.starvation or {}
+    local existing = data.render.starvation[entity.unit_number]
+    if existing and existing.valid then
+        existing.destroy()
+    end
+    data.render.starvation[entity.unit_number] = rendering.draw_sprite({
+        sprite = 'utility/warning_icon',
+        tint = STARVED_TINT,
+        target = { entity = entity, offset = corner_offset(entity) },
+        surface = entity.surface,
+        players = { player.index },
+        time_to_live = STARVATION_TICKS,
+        x_scale = STARVATION_SCALE,
+        y_scale = STARVATION_SCALE,
+        render_layer = 'entity-info-icon',
+    })
+end
 
 --- @param player LuaPlayer
 --- @param starved LuaEntity[]
---- @param saturated LuaEntity[]
-function Rendering.flash_starvation(player, starved, saturated)
+function Rendering.flash_starvation(player, starved)
+    local data = State.get_player_data(player.index)
     for _, entity in pairs(starved) do
         if entity.valid then
-            rendering.draw_sprite({
-                sprite = 'utility/warning_icon',
-                tint = STARVED_TINT,
-                target = entity,
-                surface = entity.surface,
-                players = { player.index },
-                time_to_live = STARVATION_TICKS,
-                render_layer = 'entity-info-icon',
-            })
-        end
-    end
-    for _, entity in pairs(saturated) do
-        if entity.valid then
-            rendering.draw_sprite({
-                sprite = 'utility/check_mark_white',
-                tint = SATURATED_TINT,
-                target = entity,
-                surface = entity.surface,
-                players = { player.index },
-                time_to_live = STARVATION_TICKS,
-                render_layer = 'entity-info-icon',
-            })
+            draw_starvation_icon(data, player, entity)
         end
     end
 end

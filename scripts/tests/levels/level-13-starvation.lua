@@ -3,9 +3,11 @@
 --- behavior the render reflects: a furnace the player has no spare fuel for
 --- (reserve == carried amount, so `available <= 0` — the exact condition the
 --- fuel pass records as "starved") stays unfueled, and a furnace pre-filled
---- to its cap (the "saturated" condition) never receives more. The starvation
---- flag itself is switched on throughout as a smoke test that recording
---- starved/saturated entities and drawing the short-lived icons never errors.
+--- to its cap never receives more. Rebalance is force-disabled here — it
+--- defaults on and would otherwise siphon coal from the full furnace into the
+--- "starved" one, defeating the whole premise. The starvation flag itself is
+--- switched on throughout as a smoke test that recording starved entities and
+--- drawing the short-lived icon never errors.
 
 local Bench = require('__lazy-bastards-friend__.scripts.tests.lib.bench')
 local Harness = require('__lazy-bastards-friend__.scripts.tests.lib.harness')
@@ -30,8 +32,8 @@ end)
 
 Bench.on_player_created(KIT, 'L13 starvation', {
     'Your coal is fully reserved — you have none spare, so the empty furnace should flash a red "starved" icon over it and never get fueled.',
-    'The other furnace starts already full — it should flash a green "saturated" icon and never receive more.',
-    'Toggle "Show starvation/saturation feedback" off in your panel to confirm the icons stop appearing.',
+    'The other furnace starts already full and should never receive more.',
+    'Toggle "Show starvation feedback" off in your panel to confirm the icon stops appearing.',
 })
 
 Event.add(defines.events.on_player_created, function(event)
@@ -40,6 +42,8 @@ Event.add(defines.events.on_player_created, function(event)
         return
     end
     remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'appearance_starvation', true)
+    -- Rebalance defaults to true; disable it so it can't feed the starved furnace from the full one and mask the condition under test.
+    remote.call('lazy-bastards-friend', 'set_player_flag', player.index, 'feed_rebalance', false)
     remote.call('lazy-bastards-friend', 'set_player_reserve', player.index, 'coal', RESERVE)
 
     Harness.watch('starved furnace never gets fueled (nothing spareable)', function()

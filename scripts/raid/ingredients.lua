@@ -6,6 +6,7 @@ local Shared = require('__lazy-bastards-friend__.scripts.raid.shared')
 local Ingredients = {}
 
 local FEED_SECONDS = 30 -- top up ingredient inputs to ~this many seconds of crafting/research
+local STARVE_SECONDS = 10 -- only flag starved once buffer drops below ~this many seconds (latch: refill still tops up to FEED_SECONDS well before this, so a machine sitting at e.g. 29/30 plates never flashes)
 
 -- == Smelt map ================================================================
 
@@ -95,11 +96,12 @@ local function pick_smelt_input(proto, totals, reserves)
     return best_name, best_entry
 end
 
---- How many crafts/research-units this entity gets through in ~FEED_SECONDS at its current speed (min 1). Labs derive speed from prototype.get_researching_speed() + entity.speed_bonus since LuaEntity.crafting_speed doesn't apply to them; research_unit_energy is in ticks so it's converted to seconds to match LuaRecipe.energy.
+--- How many crafts/research-units this entity gets through in ~`seconds` at its current speed (min 1). Labs derive speed from prototype.get_researching_speed() + entity.speed_bonus since LuaEntity.crafting_speed doesn't apply to them; research_unit_energy is in ticks so it's converted to seconds to match LuaRecipe.energy.
 --- @param entity LuaEntity
 --- @param energy double? recipe/research energy; nil/0 -> treat as 1 craft
+--- @param seconds double? window size; defaults to FEED_SECONDS
 --- @return double
-local function crafts_in_window(entity, energy)
+local function crafts_in_window(entity, energy, seconds)
     if not energy or energy <= 0 then
         return 1
     end
@@ -113,7 +115,7 @@ local function crafts_in_window(entity, energy)
     if not speed or speed <= 0 then
         speed = 0.01
     end
-    return math.max(1, FEED_SECONDS * speed / energy)
+    return math.max(1, (seconds or FEED_SECONDS) * speed / energy)
 end
 
 --- @param player LuaPlayer
@@ -123,20 +125,18 @@ end
 --- @param reserves table<string, integer>
 --- @param report LbfReport
 --- @param starved LuaEntity[]? populated when the starvation flag is on
---- @param saturated LuaEntity[]? populated when the starvation flag is on
-function Ingredients.pass(player, entities, main, totals, reserves, report, starved, saturated)
+function Ingredients.pass(player, entities, main, totals, reserves, report, starved)
     local research = player.force.current_research
     local research_ingredients = research and research.research_unit_ingredients
     local research_energy = research and research.research_unit_energy
     local lab_accepts = {} -- lab prototype name -> { pack name -> true }
-    local track = starved ~= nil or saturated ~= nil
     --- @type table<string, LbfFeedGroup>
     local groups = {}
     for _, entity in pairs(entities) do
         if entity.valid then
             local entity_type = entity.type
-            -- Per-entity starvation bookkeeping: any unspareable ingredient marks it starved; saturated if every checked ingredient is already at cap.
-            local wants_any, is_starved, is_saturated = false, false, true
+            -- Per-entity starvation bookkeeping: any unspareable ingredient marks it starved.
+            local wants_any, is_starved = false, false
             if Shared.INGREDIENT_TYPES[entity_type] then
                 local input = entity.get_inventory(defines.inventory.crafter_input)
                 if input then
@@ -147,13 +147,13 @@ function Ingredients.pass(player, entities, main, totals, reserves, report, star
                             if ingredient.type == 'item' then
                                 wants_any = true
                                 local cap = math.ceil(ingredient.amount * crafts)
-                                if Shared.available(totals, reserves, ingredient.name) > 0 then
-                                    Shared.add_to_group(groups, ingredient.name, input, cap)
-                                    if track and Transfer.count_by_name(input, ingredient.name) < cap then
-                                        is_saturated = false
+                                local count = Transfer.count_by_name(input, ingredient.name)
+                                if count < cap then
+                                    if Shared.available(totals, reserves, ingredient.name) > 0 then
+                                        Shared.add_to_group(groups, ingredient.name, input, cap)
+                                    elseif count < math.ceil(ingredient.amount * crafts_in_window(entity, energy, STARVE_SECONDS)) then
+                                        is_starved = true
                                     end
-                                else
-                                    is_starved = true
                                 end
                             end
                         end
@@ -164,20 +164,24 @@ function Ingredients.pass(player, entities, main, totals, reserves, report, star
                         local entry
                         if name then
                             entry = smelt_entry(proto, name)
-                            if Shared.available(totals, reserves, name) <= 0 then
-                                wants_any, is_starved = true, true
-                                name = nil
+                            local crafts = crafts_in_window(entity, entry.energy)
+                            local cap = math.ceil(entry.amount * crafts)
+                            local count = Transfer.count_by_name(input, name)
+                            if count < cap then
+                                wants_any = true
+                                if Shared.available(totals, reserves, name) > 0 then
+                                    Shared.add_to_group(groups, name, input, cap)
+                                elseif count < math.ceil(entry.amount * crafts_in_window(entity, entry.energy, STARVE_SECONDS)) then
+                                    is_starved = true
+                                end
                             end
                         else
                             name, entry = pick_smelt_input(proto, totals, reserves)
-                        end
-                        if name and entry then
-                            wants_any = true
-                            local crafts = crafts_in_window(entity, entry.energy)
-                            local cap = math.ceil(entry.amount * crafts)
-                            Shared.add_to_group(groups, name, input, cap)
-                            if track and Transfer.count_by_name(input, name) < cap then
-                                is_saturated = false
+                            if name and entry then
+                                wants_any = true
+                                local crafts = crafts_in_window(entity, entry.energy)
+                                local cap = math.ceil(entry.amount * crafts)
+                                Shared.add_to_group(groups, name, input, cap)
                             end
                         end
                     end
@@ -200,26 +204,20 @@ function Ingredients.pass(player, entities, main, totals, reserves, report, star
                         if accepts[ingredient.name] then
                             wants_any = true
                             local cap = math.ceil(ingredient.amount * crafts)
-                            if Shared.available(totals, reserves, ingredient.name) > 0 then
-                                Shared.add_to_group(groups, ingredient.name, input, cap)
-                                if track and Transfer.count_by_name(input, ingredient.name) < cap then
-                                    is_saturated = false
+                            local count = Transfer.count_by_name(input, ingredient.name)
+                            if count < cap then
+                                if Shared.available(totals, reserves, ingredient.name) > 0 then
+                                    Shared.add_to_group(groups, ingredient.name, input, cap)
+                                elseif count < math.ceil(ingredient.amount * crafts_in_window(entity, research_energy, STARVE_SECONDS)) then
+                                    is_starved = true
                                 end
-                            else
-                                is_starved = true
                             end
                         end
                     end
                 end
             end
-            if track and wants_any then
-                if is_starved then
-                    if starved then
-                        starved[#starved + 1] = entity
-                    end
-                elseif is_saturated and saturated then
-                    saturated[#saturated + 1] = entity
-                end
+            if starved and wants_any and is_starved then
+                starved[#starved + 1] = entity
             end
         end
     end

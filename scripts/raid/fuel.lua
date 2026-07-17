@@ -5,6 +5,8 @@ local Shared = require('__lazy-bastards-friend__.scripts.raid.shared')
 
 local Fuel = {}
 
+local STARVE_STACK_RATIO = 1 / 3 -- only flag starved once the loaded fuel drops below ~this share of a full stack (latch, mirrors Ingredients.STARVE_SECONDS/FEED_SECONDS: burning down 1 of 50 coal shouldn't flash the same as being down to the last few)
+
 --- @class LbfFuelCandidate
 --- @field name string
 --- @field category string
@@ -31,26 +33,28 @@ local function get_player_fuels(totals, reserves)
     return fuels
 end
 
---- Fuel to feed this entity: top up whatever is already loaded, else the best carried fuel its burner accepts; records starved/saturated entities when the caller passes those lists.
+--- Fuel to feed this entity: top up whatever is already loaded, else the best carried fuel its burner accepts; records starved entities when the caller passes that list.
 --- @param entity LuaEntity
 --- @param fuel_inventory LuaInventory
 --- @param fuels LbfFuelCandidate[]
 --- @param totals table<string, integer>
 --- @param reserves table<string, integer>
 --- @param starved LuaEntity[]?
---- @param saturated LuaEntity[]?
 --- @return string?
-local function pick_fuel(entity, fuel_inventory, fuels, totals, reserves, starved, saturated)
+local function pick_fuel(entity, fuel_inventory, fuels, totals, reserves, starved)
     local current = Shared.first_item_name(fuel_inventory)
     if current then
+        local stack_size = prototypes.item[current].stack_size
+        local count = Transfer.count_by_name(fuel_inventory, current)
+        if count >= stack_size then
+            -- Already topped up: nothing to feed, and nothing to flag regardless of what the player carries
+            return nil
+        end
         if Shared.available(totals, reserves, current) > 0 then
-            if saturated and Transfer.count_by_name(fuel_inventory, current) >= prototypes.item[current].stack_size then
-                saturated[#saturated + 1] = entity
-            end
             return current
         end
         -- Fuel slots are usually single; if the player can't spare this fuel, skip the entity rather than mix in a second type
-        if starved then
+        if starved and count < stack_size * STARVE_STACK_RATIO then
             starved[#starved + 1] = entity
         end
         return nil
@@ -77,8 +81,7 @@ end
 --- @param reserves table<string, integer>
 --- @param report LbfReport
 --- @param starved LuaEntity[]? populated when the starvation flag is on
---- @param saturated LuaEntity[]? populated when the starvation flag is on
-function Fuel.pass(entities, main, totals, reserves, report, starved, saturated)
+function Fuel.pass(entities, main, totals, reserves, report, starved)
     local fuels = get_player_fuels(totals, reserves)
     --- @type table<string, LbfFeedGroup>
     local groups = {}
@@ -86,7 +89,7 @@ function Fuel.pass(entities, main, totals, reserves, report, starved, saturated)
         if entity.valid then
             local fuel_inventory = entity.get_fuel_inventory()
             if fuel_inventory then
-                local name = pick_fuel(entity, fuel_inventory, fuels, totals, reserves, starved, saturated)
+                local name = pick_fuel(entity, fuel_inventory, fuels, totals, reserves, starved)
                 if name then
                     Shared.add_to_group(groups, name, fuel_inventory)
                 end

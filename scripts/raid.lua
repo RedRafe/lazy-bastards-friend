@@ -74,18 +74,18 @@ function Raid.service(player, pending)
     if collect then
         Collect.pass(entities, main, take_chests, Collect.get_rivals(player, pending), report)
     end
-    local starved, saturated
+    local starved
     if starvation then
-        starved, saturated = {}, {}
+        starved = {}
     end
     if feed_fuel or feed_ingredients or combat then
         local totals = Shared.inventory_totals(main)
         local reserves = data.reserves
         if feed_fuel then
-            Fuel.pass(entities, main, totals, reserves, report, starved, saturated)
+            Fuel.pass(entities, main, totals, reserves, report, starved)
         end
         if feed_ingredients then
-            Ingredients.pass(player, entities, main, totals, reserves, report, starved, saturated)
+            Ingredients.pass(player, entities, main, totals, reserves, report, starved)
         end
         if combat then
             Ammo.pass(entities, main, totals, reserves, report)
@@ -97,8 +97,8 @@ function Raid.service(player, pending)
     if drain_trash then
         Trash.pass(player, entities, report)
     end
-    if starvation and (#starved > 0 or #saturated > 0) then
-        Rendering.flash_starvation(player, starved, saturated)
+    if starvation and #starved > 0 then
+        Rendering.flash_starvation(player, starved)
     end
     Report.flush(player, anchor.surface, data, report, State.effective(player.index, 'appearance_summary'))
 end

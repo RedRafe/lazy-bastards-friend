@@ -90,7 +90,7 @@ data:extend({
         type = 'bool-setting',
         name = 'lbf-feed-rebalance',
         setting_type = 'runtime-per-user',
-        default_value = false,
+        default_value = true,
         order = 'b[feed]-e',
     },
     {

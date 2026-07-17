@@ -102,7 +102,7 @@ remote.call('lazy-bastards-friend', 'set_player_enabled', 1, 'feed', false)
   shape     = 'circle',    -- 'circle' | 'square'
   flags     = {            -- see set_player_flag
     feed_fuel = true, feed_ingredients = true, feed_combat = true,
-    feed_trash = false, feed_rebalance = false,
+    feed_trash = false, feed_rebalance = true,
     collect_chests = false, collect_ground = false,
     appearance_summary = false, appearance_show_others_area = false,
     appearance_starvation = false, appearance_use_player_color = true,
@@ -124,12 +124,12 @@ channel's prefix (`feed_`, `collect_`, `appearance_`):
 | `feed_ingredients` | `true` | fill crafter/lab/furnace inputs |
 | `feed_combat` | `true` | top up ammo-turrets — follows `feed`'s chain, no lock of its own |
 | `feed_trash` | `false` | drain logistic trash into nearby chests (paused while `collect_chests` is on) |
-| `feed_rebalance` | `false` | move surplus fuel/ingredients between over- and under-stocked machines |
+| `feed_rebalance` | `true` | move surplus fuel/ingredients between over- and under-stocked machines |
 | `collect_chests` | `false` | also empty chests (needs `lbf-allow-chest-collect` map setting) |
 | `collect_ground` | `false` | also pick up items on the ground |
 | `appearance_summary` | `false` | floating per-cycle transfer summary |
 | `appearance_show_others_area` | `false` | also see every other player's area render |
-| `appearance_starvation` | `false` | flash red/green icons over starved/saturated machines |
+| `appearance_starvation` | `false` | flash a red icon over starved machines |
 | `appearance_use_player_color` | `true` | draw the area in the player's own color |
 
 `appearance_fill` ("Fill area") is not a flag — it's the `appearance`

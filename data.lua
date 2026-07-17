@@ -107,8 +107,7 @@ end
 -- id -> suffix; several ids share a shorter suffix than their id, e.g.
 -- 'appearance_summary' -> 'summary').
 local flag_icons = {
-    'fuel', 'ingredients', 'combat', 'trash', 'rebalance',
-    'chests', 'ground', 'use-player-color', 'show-others', 'starvation', 'summary',
+    'use-player-color', 'show-others', 'starvation', 'summary',
     'circle', 'square',
 }
 for _, flag in pairs(flag_icons) do
@@ -119,6 +118,36 @@ for _, flag in pairs(flag_icons) do
             filename = '__lazy-bastards-friend__/graphics/icons/flags/lbf-flag-' .. flag .. '.png',
             size = 32,
             scale = 0.5,
+            flags = { 'icon' },
+        },
+    })
+end
+
+-- Base/core vanilla icons reused for the flags below, referenced by full
+-- filename (not `item.name`/`virtual-signal.name`) so a mod editing/removing
+-- those prototypes can't break these sprites. Each entry mirrors its source
+-- file's own mip-strip layout (base signal icons: 64px + 3 mip levels =
+-- 120px wide; core's recipe-arrow: 32px + 1 mip level = 48px wide;
+-- item-on-ground: flat 64px, no mip strip) and scales down to the same
+-- effective 16px as the hand-drawn flag_icons above.
+local vanilla_flag_icons = {
+    fuel = { filename = '__base__/graphics/icons/signal/signal-fuel.png', size = 64, mipmap_count = 4, scale = 0.25 },
+    ingredients = { filename = '__core__/graphics/icons/mip/recipe-arrow.png', size = 32, mipmap_count = 2, scale = 0.5 },
+    combat = { filename = '__base__/graphics/icons/signal/signal-weapon.png', size = 64, mipmap_count = 4, scale = 0.25 },
+    trash = { filename = '__base__/graphics/icons/signal/signal-trash-bin.png', size = 64, mipmap_count = 4, scale = 0.25 },
+    rebalance = { filename = '__base__/graphics/icons/signal/signal-recycle.png', size = 64, mipmap_count = 4, scale = 0.25 },
+    chests = { filename = '__base__/graphics/icons/signal/signal-stack-size.png', size = 64, mipmap_count = 4, scale = 0.25 },
+    ground = { filename = '__core__/graphics/item-on-ground.png', size = 64, scale = 0.25 },
+}
+for flag, icon in pairs(vanilla_flag_icons) do
+    data:extend({
+        {
+            type = 'sprite',
+            name = 'lbf-flag-' .. flag,
+            filename = icon.filename,
+            size = icon.size,
+            mipmap_count = icon.mipmap_count,
+            scale = icon.scale,
             flags = { 'icon' },
         },
     })

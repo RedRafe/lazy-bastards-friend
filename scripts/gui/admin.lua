@@ -383,13 +383,13 @@ function Admin.open(player)
     )
     local deep = shell.add({ type = 'frame', name = 'deep', style = 'tab_deep_frame_in_entity_frame', direction = 'vertical' })
     local tabs = deep.add({ type = 'tabbed-pane', name = 'lbf-tabs', tags = { lbf_admin_action = 'tab' } })
-    local watchdog_tab = tabs.add({ type = 'tab', caption = { 'lbf-gui.tab-watchdog' } })
-    build_watchdog_tab(tabs)
-    tabs.add_tab(watchdog_tab, tabs.watchdog)
     local players_tab = tabs.add({ type = 'tab', caption = { 'lbf-gui.tab-players' } })
     build_players_tab(tabs)
     tabs.add_tab(players_tab, tabs.players)
-    tabs.selected_tab_index = 2 -- player management is the everyday page
+    local watchdog_tab = tabs.add({ type = 'tab', caption = { 'lbf-gui.tab-watchdog' } })
+    build_watchdog_tab(tabs)
+    tabs.add_tab(watchdog_tab, tabs.watchdog)
+    tabs.selected_tab_index = 1 -- player management is the everyday page
     update_tab_description(frame)
 
     storage.admin_guis[player.index] = frame
