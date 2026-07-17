@@ -164,9 +164,12 @@ local function build_players_tab(tabs)
         type = 'switch',
         name = 'lbf-global-master',
         switch_state = 'right',
+        left_label_caption = { 'lbf-gui.switch-off' },
+        right_label_caption = { 'lbf-gui.switch-on' },
         tooltip = { 'lbf-gui.global-switch-tooltip' },
         tags = { lbf_admin_action = 'global-master' },
     })
+    GuiUtil.add_pusher(row)
     for _, channel in pairs(State.channels) do
         row.add({
             type = 'checkbox',
@@ -356,7 +359,9 @@ function Admin.open(player)
     local existing = get_frame(player)
     if existing then
         existing.bring_to_front()
-        player.opened = existing
+        if not player.opened and not player.opened_gui_type then
+            player.opened = existing
+        end
         return
     end
 
@@ -413,7 +418,17 @@ function Admin.open(player)
 
     storage.admin_guis[player.index] = frame
     frame.force_auto_center()
-    player.opened = frame
+    -- Only take player.opened focus when nothing else is open: doing so
+    -- unconditionally would close whatever window (e.g. the relative panel,
+    -- an entity gui) the player already had open, since player.opened is
+    -- exclusive. player.opened alone isn't enough here: the character
+    -- inventory/crafting screen (where our relative panel's button lives)
+    -- leaves player.opened nil but sets opened_gui_type to
+    -- defines.gui_type.controller, so check both or writing to player.opened
+    -- still force-closes the inventory out from under the player.
+    if not player.opened and not player.opened_gui_type then
+        player.opened = frame
+    end
     Admin.sync(player)
 end
 

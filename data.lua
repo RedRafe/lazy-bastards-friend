@@ -49,6 +49,30 @@ data:extend({
         scale = 0.5,
         flags = { 'gui' },
     },
+    -- Inline warning glyph for tooltip lines (relative.lua's flag_tooltip/
+    -- shape_tooltip), replacing [img=virtual-signal.signal-alert]. Scaled to
+    -- the same effective 16px as family_icons/flag_icons below, since it sits
+    -- inline in text rather than as a button icon.
+    {
+        type = 'sprite',
+        name = 'lbf-alert-warning',
+        filename = '__core__/graphics/icons/alerts/warning-icon.png',
+        size = 64,
+        scale = 0.25,
+        flags = { 'icon' },
+    },
+    -- Inline warning icon for the disabled-flag tooltips (relative.lua's
+    -- flag_tooltip/shape_tooltip) — core's alert triangle rather than the
+    -- virtual-signal sprite, scaled down to match the family/flag icons'
+    -- effective 16px so it sits flush in a text line.
+    {
+        type = 'sprite',
+        name = 'lbf-alert-warning',
+        filename = '__core__/graphics/icons/alerts/warning-icon.png',
+        size = 64,
+        scale = 0.25,
+        flags = { 'icon' },
+    },
     -- Statistics-only item: the runtime pumps transferred
     -- counts into item production statistics under this name, so the mod's
     -- activity shows up in the vanilla production graphs (like base's 'science').
@@ -81,6 +105,28 @@ for _, family in pairs(family_icons) do
             type = 'sprite',
             name = 'lbf-family-' .. family,
             filename = '__lazy-bastards-friend__/graphics/icons/family/lbf-family-' .. family .. '.png',
+            size = 32,
+            scale = 0.5,
+            flags = { 'icon' },
+        },
+    })
+end
+
+-- Per-flag icons for the relative panel's Behavior/Appearance sprite-button
+-- rows (tools/make_flag_icons.py). Separate from family_icons above: own
+-- source directory, and each name here maps 1:1 to a settings-tree flag id
+-- (or a plain preference like 'summary'), not a channel/family umbrella.
+local flag_icons = {
+    'fuel', 'ingredients', 'combat', 'trash', 'rebalance',
+    'chests', 'ground', 'use-player-color', 'show-others', 'starvation', 'summary',
+    'circle', 'square',
+}
+for _, flag in pairs(flag_icons) do
+    data:extend({
+        {
+            type = 'sprite',
+            name = 'lbf-flag-' .. flag,
+            filename = '__lazy-bastards-friend__/graphics/icons/flags/lbf-flag-' .. flag .. '.png',
             size = 32,
             scale = 0.5,
             flags = { 'icon' },

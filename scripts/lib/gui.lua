@@ -62,19 +62,6 @@ function Gui.add_titlebar(frame, options)
     return titlebar, label
 end
 
---- Adds the padded "content" frame every top-level panel nests its widgets in.
---- @param parent LuaGuiElement
---- @param style string? defaults to 'inside_shallow_frame_with_padding'
---- @return LuaGuiElement
-function Gui.add_content_frame(parent, style)
-    return parent.add({
-        type = 'frame',
-        name = 'content',
-        style = style or 'inside_shallow_frame_with_padding',
-        direction = 'vertical',
-    })
-end
-
 --- Adds a flexible, stretching spacer — mirrors RedMew's utils.gui `add_pusher`.
 --- @param element LuaGuiElement
 --- @return LuaGuiElement
@@ -151,6 +138,56 @@ function Gui.add_collapsible(parent, id, caption, tags, tooltip)
         tags = tags,
     })
     local body = outer.add({ type = 'flow', name = 'body', direction = 'vertical', style = 'lbf_section_body_flow' })
+    return outer, body
+end
+
+--- Adds a "family section": a plain vertical flow (no frame/border of its
+--- own — nesting frames-in-frames here is what used to draw extra dividers
+--- between sections) holding an optional borderless header row (family
+--- icon, bold caption, a divider line filling the rest of the width, then an
+--- expand/collapse arrow) above an inside_shallow_frame body the caller
+--- fills in. Collapsing hides the body-frame, leaving just the header row.
+--- `tags` is applied to every element in the header row (flow, icon, label,
+--- line, arrow), not just the arrow button, so clicking anywhere on the
+--- header toggles the section — not just the small arrow hitbox.
+--- Pass sprite = nil for a headerless section (just the body-frame) — used
+--- for the top master-switch strip, which reads as a section but has
+--- nothing to collapse. A sibling of add_collapsible with the same contract
+--- (expand state is not tracked here — the caller owns/persists it and
+--- drives the arrow sprite / body-frame visibility itself on sync). Element
+--- tree: 'lbf-section-<id>' > 'header-flow'? (icon/label/line/arrow),
+--- 'body-frame' > 'body'.
+--- @param parent LuaGuiElement must already be a frame — this doesn't add its own
+--- @param id string unique section id; elements are named 'lbf-section-<id>' and nested 'header-flow'/'body-frame'
+--- @param sprite string? family icon shown at the left of the header; omit (with caption/tags/tooltip) for no header
+--- @param caption LocalisedString?
+--- @param tags table? tags applied to every header element (must route a click to the caller's dispatcher)
+--- @param tooltip LocalisedString? shown on the caption label
+--- @return LuaGuiElement outer the 'lbf-section-<id>' flow (index into it for sync)
+--- @return LuaGuiElement body the vertical flow for section content
+function Gui.add_family_section(parent, id, sprite, caption, tags, tooltip)
+    local outer = parent.add({ type = 'flow', name = 'lbf-section-' .. id, style = 'lbf_section_flow', direction = 'vertical' })
+    if sprite then
+        local header_flow = outer.add({ type = 'flow', name = 'header-flow', direction = 'horizontal', style = 'lbf_section_header_flow', tags = tags })
+        header_flow.add({
+            type = 'sprite-button',
+            name = 'icon',
+            style = 'lbf_section_icon_button',
+            sprite = sprite,
+            tags = tags,
+        })
+        header_flow.add({ type = 'label', name = 'label', caption = caption, tooltip = tooltip, style = 'lbf_section_caption_label', tags = tags })
+        header_flow.add({ type = 'line', name = 'line', direction = 'horizontal', style = 'lbf_section_header_line', tags = tags })
+        header_flow.add({
+            type = 'sprite-button',
+            name = 'arrow',
+            style = 'lbf_section_arrow_button',
+            sprite = 'utility/collapse',
+            tags = tags,
+        })
+    end
+    local body_frame = outer.add({ type = 'frame', name = 'body-frame', style = 'inside_shallow_frame', direction = 'vertical' })
+    local body = body_frame.add({ type = 'flow', name = 'body', direction = 'vertical', style = 'lbf_section_body_flow' })
     return outer, body
 end
 

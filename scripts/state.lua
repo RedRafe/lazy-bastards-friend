@@ -173,18 +173,16 @@ end
 --- @field ui {open: boolean, sections: table<string, boolean>} relative-gui prefs: whether the panel is expanded from its button, and which collapsible sections are open
 
 --- Default relative-gui layout prefs for a brand new player: panel starts
---- collapsed to its button; once opened, only Behavior is expanded (the common
---- case — deciding what to feed/collect), everything else starts collapsed to
---- keep the panel small. 'feed'/'collect' are the advanced-options expanders
---- inside Behavior.
+--- collapsed to its button; once opened, Feed and Collect are expanded (the
+--- common case — deciding what to feed/collect), everything else starts
+--- collapsed to keep the panel small.
 --- @return {open: boolean, sections: table<string, boolean>}
 function State.default_ui()
     return {
         open = false,
         sections = {
-            behavior = true,
-            feed = false,
-            collect = false,
+            feed = true,
+            collect = true,
             appearance = false,
             reserves = false,
         },

@@ -133,8 +133,8 @@ data:extend({
         name = 'lbf-opacity',
         setting_type = 'runtime-per-user',
         default_value = 8,
-        minimum_value = 2,
-        maximum_value = 50,
+        minimum_value = 0,
+        maximum_value = 100,
         order = 'd[appearance]-d',
     },
     {

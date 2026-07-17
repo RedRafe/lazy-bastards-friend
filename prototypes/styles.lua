@@ -57,7 +57,7 @@ styles.lbf_open_button = {
     size = 32,
 }
 
--- 308 = width the reserve editor row pushes the panel to (with the 28px elem
+-- 328 = width the reserve editor row pushes the panel to (with the 28px elem
 -- button below), so opening the editor doesn't resize the frame.
 -- Wordmark banner at the top of the open panel.
 styles.lbf_banner_image = {
@@ -66,10 +66,36 @@ styles.lbf_banner_image = {
     bottom_margin = 4,
 }
 
+-- vertically_stretchable = 'off' opts out of the vertical-fill Factorio
+-- applies to relative_gui_position = left/right anchors (matching the
+-- docked controller_gui's height) — without it, sections below stretch to
+-- fill the forced height instead of hugging their own content, which also
+-- throws off vertical centering of fixed-height children like separator lines.
 styles.lbf_relative_frame = {
     type = 'frame_style',
     parent = 'frame',
-    natural_width = 308,
+    natural_width =328,
+    vertically_stretchable = 'off',
+}
+
+-- Custom-color frame (scripts/gui/relative.lua): centers its r/g/b rows
+-- horizontally instead of hugging the frame's left edge.
+styles.lbf_color_frame = {
+    type = 'frame_style',
+    parent = 'bordered_frame',
+    horizontally_stretchable = 'on',
+    horizontal_align = 'center',
+}
+
+-- The frame stretches its rows full-width (see lbf_color_frame above), so
+-- each row also needs its own horizontal_align — otherwise the row's
+-- label/slider/textfield still hug its own left edge despite the frame
+-- centering the row itself.
+styles.lbf_color_row_flow = {
+    type = 'horizontal_flow_style',
+    parent = 'lbf_row_flow',
+    horizontally_stretchable = 'on',
+    horizontal_align = 'center',
 }
 
 -- Advanced-options list nested under a behavior row.
@@ -77,6 +103,114 @@ styles.lbf_indented_flow = {
     type = 'vertical_flow_style',
     left_padding = 16,
     vertical_spacing = 4,
+}
+
+-- "Family section" container (GuiUtil.add_family_section): a plain vertical
+-- flow, no frame/border of its own — just a header row above a body-frame.
+-- top_margin puts a small gap above each section so consecutive sections
+-- (siblings directly inside the content frame) don't run into each other.
+styles.lbf_section_flow = {
+    type = 'vertical_flow_style',
+    horizontally_stretchable = 'on',
+    top_margin = 4,
+}
+
+-- Header row: family icon, bold caption, a divider line filling the
+-- remaining width, then the collapse/expand arrow.
+styles.lbf_section_header_flow = {
+    type = 'horizontal_flow_style',
+    vertical_align = 'center',
+    horizontal_spacing = 6,
+}
+
+-- Family icon in the header — decorative only (ignored_by_interaction), a
+-- transparent slot so only the sprite itself shows.
+styles.lbf_section_icon_button = {
+    type = 'button_style',
+    parent = 'transparent_slot',
+    size = 24,
+}
+
+-- Collapse/expand arrow — same transparent look as the icon, left un-tinted.
+styles.lbf_section_arrow_button = {
+    type = 'button_style',
+    parent = 'transparent_slot',
+    size = 24,
+}
+
+styles.lbf_section_caption_label = {
+    type = 'label_style',
+    font = 'default-bold',
+    font_color = { 255, 255, 255 },
+}
+
+-- Divider line between the caption and the collapse arrow; stretches to fill
+-- the header row.
+styles.lbf_section_header_line = {
+    type = 'line_style',
+    horizontally_stretchable = 'on',
+}
+
+-- Vertical separator between a family's master switch and its row of
+-- shortcut_bar_button flags; fixed to the buttons' own 40px height rather
+-- than stretching with the row (a stretched line reads oddly tall next to
+-- the switch on some resolutions).
+styles.lbf_row_separator_line = {
+    type = 'line_style',
+    height = 40,
+}
+
+--- Appearance's separator sits next to a taller settings column (radius +
+--- opacity + flag row). vertically_stretchable only takes effect between
+--- cells of the same table row (Factorio ignores it in flows), so the row
+--- itself is a 3-column, 1-row table rather than a flow — see
+--- lbf_appearance_row_table below.
+styles.lbf_row_separator_line_stretch = {
+    type = 'line_style',
+    minimal_height = 40,
+    vertically_stretchable = 'on',
+}
+
+--- Appearance channel's switch + separator + settings row. A table (not a
+--- flow) so the separator's vertically_stretchable actually fills the row
+--- height set by the taller settings cell.
+styles.lbf_appearance_row_table = {
+    type = 'table_style',
+    horizontal_spacing = 4,
+    column_alignments = {
+        { column = 1, alignment = 'middle-center' }, -- master switch
+        { column = 2, alignment = 'middle-center' }, -- separator
+        { column = 3, alignment = 'top-left' }, -- radius/opacity/flags settings
+    },
+}
+
+-- Radius/opacity as a 2-column [label | slider] grid, value shown in the
+-- slider's own tooltip rather than a third column (keeps the panel narrow).
+styles.lbf_appearance_sliders_table = {
+    type = 'table_style',
+    vertical_spacing = 4,
+    horizontal_spacing = 8,
+    column_alignments = {
+        { column = 1, alignment = 'middle-left' },
+        { column = 2, alignment = 'middle-left' },
+    },
+}
+
+-- Vanilla 'slider' defaults to minimal_width 160, which still pushes the
+-- panel wider than the 328px it settles at elsewhere; shave 12px off so the
+-- Appearance section stops resizing the whole relative GUI.
+styles.lbf_appearance_slider = {
+    type = 'slider_style',
+    parent = 'slider',
+    minimal_width = 148,
+}
+
+-- Tight-spacing row so a family's master switch + separator + shortcut-bar
+-- flag strip read as one continuous unit.
+styles.lbf_icon_row_flow = {
+    type = 'horizontal_flow_style',
+    vertical_align = 'center',
+    horizontal_spacing = 4,
 }
 
 -- Reserved-items slot grid: vanilla dark tiled-slots background, scrolls past 4 rows.
