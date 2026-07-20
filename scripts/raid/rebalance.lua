@@ -1,4 +1,4 @@
---- Pass 6: rebalance. Machine-to-machine only (never touches player inventory/reserves), scoped by item name rather than identical machines (e.g. a coal-hoarding stone furnace can feed a coal-starved steel furnace). Ingredient side only tops up inventories that already hold the item (no empty-acceptance inference, to avoid duplicating ingredients.pass's recipe/smelt-map logic); both sides use a flat stack-size cap rather than each pass's finer per-entity cap.
+--- Pass 6: rebalance. Machine-to-machine only (never touches player inventory/reserves), scoped by item name rather than identical machines (e.g. a coal-hoarding stone furnace can feed a coal-starved steel furnace). Ingredient side only tops up inventories that already hold the item (no empty-acceptance inference, to avoid duplicating ingredients.pass's recipe logic); both sides use a flat stack-size cap rather than each pass's finer per-entity cap.
 
 local Distribution = require('__lazy-bastards-friend__.scripts.lib.distribution')
 local Transfer = require('__lazy-bastards-friend__.scripts.lib.transfer')

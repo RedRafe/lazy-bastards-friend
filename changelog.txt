@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 2.1.1
+Date: 2026-07-19
+  Changes:
+    - Ingredient feed no longer guesses ore for a furnace that never had a recipe set; only machines with a set recipe (or, for furnaces, their last-smelted recipe while idle) get ingredients pushed in
+---------------------------------------------------------------------------------------------------
 Version: 2.1.0
 Date: 2026-07-17
   Info:

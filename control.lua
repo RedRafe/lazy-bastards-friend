@@ -33,7 +33,6 @@ end
 
 Event.on_init(function()
     State.init()
-    Raid.rebuild_smelt_map()
     for _, player in pairs(game.players) do
         setup_player(player)
     end
@@ -42,7 +41,6 @@ end)
 
 Event.on_configuration_changed(function()
     State.init()
-    Raid.rebuild_smelt_map()
     AdminGui.close_all() -- schemas may have changed; stale frames crash sync
     for _, player in pairs(game.players) do
         RelativeGui.build(player)

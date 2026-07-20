@@ -7,8 +7,8 @@ local Event = require('__lazy-bastards-friend__.scripts.lib.event')
 local AREA = { { -12, -8 }, { 12, 8 } }
 
 local BENCH = {
-    -- Fueled but empty of ore: ingredient pass must supply the iron-ore from the kit.
-    { name = 'stone-furnace', position = { -8, -4 }, items = { [defines.inventory.fuel] = { ['coal'] = 5 } } },
+    -- Fueled with a recipe already smelting (1 ore, enough to auto-set the recipe): ingredient pass must top it up from the kit.
+    { name = 'stone-furnace', position = { -8, -4 }, items = { [defines.inventory.fuel] = { ['coal'] = 5 }, [defines.inventory.crafter_input] = { ['iron-ore'] = 1 } } },
     -- Starving assemblers with a recipe set but no ingredients.
     { name = 'assembling-machine-1', position = { -2, -4 }, recipe = 'iron-gear-wheel' },
     { name = 'assembling-machine-1', position = { 4, -4 }, recipe = 'copper-cable' },

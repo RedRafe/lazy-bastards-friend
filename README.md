@@ -14,9 +14,10 @@ taken over. Admins can always re-enable it.
 
 - **Collect** — pulls finished products and burnt fuel results out of machines,
   plus (opt-in) chest contents and ground-dropped items, into your inventory.
-- **Feed** — pushes fuel, recipe ingredients, and ore into burners, crafters, and
-  labs in range. Furnaces without a recipe set get smeltable ore inferred
-  automatically; labs are fed only the packs your current research needs.
+- **Feed** — pushes fuel and recipe ingredients into burners, crafters, and labs
+  in range. Only machines with a recipe set are fed (an idle furnace keeps
+  getting fed what it last smelted); labs are fed only the packs your current
+  research needs.
 - **Combat** — keeps ammo turrets and artillery topped up from your inventory.
 - **Rebalance** — moves surplus fuel/ingredients from over-stocked machines to
   under-stocked ones sharing the same item, even when you're carrying none to

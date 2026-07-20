@@ -15,9 +15,6 @@ local Raid = {}
 
 local AFK_TICKS = 5 * 60 * 60 -- after 5 min AFK, service at 1/4 rate
 
---- Rebuild storage.smelt_map (recipe-less-furnace inference). Call on_init/config_changed.
-Raid.rebuild_smelt_map = Ingredients.rebuild_smelt_map
-
 --- Whether `entity` is a type any raid pass could act on — used by the
 --- exclusion-toggle custom-input to validate the hovered entity.
 --- @param entity LuaEntity?

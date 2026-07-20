@@ -1,4 +1,4 @@
---- Pass 4: feed ingredients, including a recipe-less-furnace smelt map (feeds fresh/idle furnaces from carried inputs) and lab feeding scoped to current research.
+--- Pass 4: feed ingredients to machines with a set recipe (including a furnace's last-smelted recipe while idle) and lab feeding scoped to current research.
 
 local Transfer = require('__lazy-bastards-friend__.scripts.lib.transfer')
 local Shared = require('__lazy-bastards-friend__.scripts.raid.shared')
@@ -8,34 +8,7 @@ local Ingredients = {}
 local FEED_SECONDS = 30 -- top up ingredient inputs to ~this many seconds of crafting/research
 local STARVE_SECONDS = 10 -- only flag starved once buffer drops below ~this many seconds (latch: refill still tops up to FEED_SECONDS well before this, so a machine sitting at e.g. 29/30 plates never flashes)
 
--- == Smelt map ================================================================
-
---- Rebuild storage.smelt_map: crafting category -> { ingredient item -> {amount, energy} }, from visible single-item-ingredient recipes (hidden recipes excluded to keep recycler-style catch-all categories out). Call on_init/config_changed.
-function Ingredients.rebuild_smelt_map()
-    local map = {}
-    for _, recipe in pairs(prototypes.recipe) do
-        if not recipe.hidden and not recipe.parameter then
-            local ingredients = recipe.ingredients
-            local only = #ingredients == 1 and ingredients[1]
-            if only and only.type == 'item' then
-                for _, category in pairs(recipe.categories) do
-                    local set = map[category]
-                    if not set then
-                        set = {}
-                        map[category] = set
-                    end
-                    local existing = set[only.name]
-                    if not existing or only.amount >= existing.amount then
-                        set[only.name] = { amount = only.amount, energy = recipe.energy }
-                    end
-                end
-            end
-        end
-    end
-    storage.smelt_map = map
-end
-
---- Item requirements of the machine's set recipe: the active one, or (furnaces) the last-smelted recipe — an idle furnace keeps making what it made.
+--- Item requirements of the machine's set recipe: the active one, or (furnaces) the last-smelted recipe — an idle furnace keeps making what it made. Returns nil for a furnace that never had a recipe, so it gets no ingredients pushed in.
 --- @param entity LuaEntity
 --- @return Ingredient[]?
 --- @return double? recipe crafting energy (seconds at crafting_speed 1)
@@ -55,45 +28,6 @@ local function recipe_ingredients(entity)
         end
     end
     return nil
-end
-
---- Per-craft amount + recipe energy of `name` in this machine's smelt-map categories (amount 1 / energy 1 if unknown).
---- @param proto LuaEntityPrototype
---- @param name string
---- @return {amount: integer, energy: double}
-local function smelt_entry(proto, name)
-    local map = storage.smelt_map or {}
-    for category in pairs(proto.crafting_categories) do
-        local set = map[category]
-        local entry = set and set[name]
-        if entry then
-            return entry
-        end
-    end
-    return { amount = 1, energy = 1 }
-end
-
---- Best smeltable the player can spare for a fresh (recipe-less, empty) furnace: the most abundant spare input its categories accept, name as tiebreak.
---- @param proto LuaEntityPrototype
---- @param totals table<string, integer>
---- @param reserves table<string, integer>
---- @return string? name
---- @return {amount: integer, energy: double}? entry
-local function pick_smelt_input(proto, totals, reserves)
-    local map = storage.smelt_map or {}
-    local best_name, best_entry, best_spare
-    for category in pairs(proto.crafting_categories) do
-        local set = map[category]
-        if set then
-            for name, entry in pairs(set) do
-                local spare = Shared.available(totals, reserves, name)
-                if spare > 0 and (not best_name or spare > best_spare or (spare == best_spare and name < best_name)) then
-                    best_name, best_entry, best_spare = name, entry, spare
-                end
-            end
-        end
-    end
-    return best_name, best_entry
 end
 
 --- How many crafts/research-units this entity gets through in ~`seconds` at its current speed (min 1). Labs derive speed from prototype.get_researching_speed() + entity.speed_bonus since LuaEntity.crafting_speed doesn't apply to them; research_unit_energy is in ticks so it's converted to seconds to match LuaRecipe.energy.
@@ -155,33 +89,6 @@ function Ingredients.pass(player, entities, main, totals, reserves, report, star
                                         is_starved = true
                                     end
                                 end
-                            end
-                        end
-                    elseif entity_type == 'furnace' then
-                        -- No recipe history: top up what's loaded, else infer from the smelt map
-                        local proto = entity.prototype
-                        local name = Shared.first_item_name(input)
-                        local entry
-                        if name then
-                            entry = smelt_entry(proto, name)
-                            local crafts = crafts_in_window(entity, entry.energy)
-                            local cap = math.ceil(entry.amount * crafts)
-                            local count = Transfer.count_by_name(input, name)
-                            if count < cap then
-                                wants_any = true
-                                if Shared.available(totals, reserves, name) > 0 then
-                                    Shared.add_to_group(groups, name, input, cap)
-                                elseif count < math.ceil(entry.amount * crafts_in_window(entity, entry.energy, STARVE_SECONDS)) then
-                                    is_starved = true
-                                end
-                            end
-                        else
-                            name, entry = pick_smelt_input(proto, totals, reserves)
-                            if name and entry then
-                                wants_any = true
-                                local crafts = crafts_in_window(entity, entry.energy)
-                                local cap = math.ceil(entry.amount * crafts)
-                                Shared.add_to_group(groups, name, input, cap)
                             end
                         end
                     end
